@@ -1,4 +1,4 @@
-package org.example.springbootexample.model;
+package com.example.demo.model;
 
 import java.time.LocalDateTime;
 
