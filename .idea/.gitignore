@@ -12,7 +12,7 @@ out/
 *.log
 logs/
 
-### Environment config (Keep secret!)
+### Environment config
 application-local.yml
 application-local.properties
 .env
