@@ -3,6 +3,7 @@ package com.example.demo.service;
 import com.example.demo.dto.UserDto;
 import com.example.demo.model.User;
 import com.example.demo.repository.UserRepository;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,10 +17,12 @@ import java.util.Optional;
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
     // 생성자 주입
-    public UserServiceImpl(UserRepository userRepository) {
+    public UserServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     /**
@@ -48,7 +51,7 @@ public class UserServiceImpl implements UserService {
 
         // 비밀번호 암호화 (실제 구현에서는 BCrypt 등 사용)
         // 여기서는 간단히 처리하지만, 실제로는 보안을 위해 암호화 필요
-        String encodedPassword = registerRequest.getPassword();
+        String encodedPassword = passwordEncoder.encode(registerRequest.getPassword());
 
         // 사용자 객체 생성
         User user = new User();
@@ -56,6 +59,7 @@ public class UserServiceImpl implements UserService {
         user.setPassword(encodedPassword);
         user.setName(registerRequest.getName());
         user.setEmail(registerRequest.getEmail());
+        user.setRole("USER"); // 기본 역할 설정
 
         // 사용자 저장
         User savedUser = userRepository.save(user);
@@ -78,10 +82,7 @@ public class UserServiceImpl implements UserService {
     public Optional<User> login(UserDto.LoginRequest loginRequest) {
         // 사용자 이름으로 사용자 조회
         return userRepository.findByUsername(loginRequest.getUsername())
-                .filter(user -> {
-                    // 비밀번호 일치 여부 확인 (실제 구현에서는 암호화된 비밀번호 비교)
-                    return user.getPassword().equals(loginRequest.getPassword());
-                });
+                .filter(user -> passwordEncoder.matches(loginRequest.getPassword(), user.getPassword()));
     }
 
     /**
@@ -100,4 +101,3 @@ public class UserServiceImpl implements UserService {
         );
     }
 }
-

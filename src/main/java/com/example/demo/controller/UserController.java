@@ -6,12 +6,26 @@ import com.example.demo.dto.ResponseDto;
 import com.example.demo.dto.UserDto;
 import com.example.demo.model.User;
 import com.example.demo.service.UserService;
+import com.example.demo.security.JwtUtil;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Optional;
+
+// 추가: 스프링 시큐리티 인증 설정/리다이렉트 도우미 import
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
+import org.springframework.security.web.savedrequest.RequestCache;
+import org.springframework.security.web.savedrequest.SavedRequest;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.util.List;
 
 /**
  * 사용자 컨트롤러
@@ -22,10 +36,12 @@ import java.util.Optional;
 public class UserController {
 
     private final UserService userService;
+    private final JwtUtil jwtUtil;
 
     // 생성자 주입
-    public UserController(UserService userService) {
+    public UserController(UserService userService, JwtUtil jwtUtil) {
         this.userService = userService;
+        this.jwtUtil = jwtUtil;
     }
 
     /**
@@ -76,7 +92,9 @@ public class UserController {
     public String login(@Valid @ModelAttribute("loginRequest") UserDto.LoginRequest loginRequest,
                         BindingResult bindingResult,
                         HttpSession session,
-                        Model model) {
+                        Model model,
+                        HttpServletRequest request,
+                        HttpServletResponse response) {
         // 유효성 검사 실패 시 로그인 페이지로 다시 이동
         if (bindingResult.hasErrors()) {
             return "user/login";
@@ -86,12 +104,32 @@ public class UserController {
         Optional<User> userOptional = userService.login(loginRequest);
 
         if (userOptional.isPresent()) {
-            // 로그인 성공 시 세션에 사용자 정보 저장
             User user = userOptional.get();
+            // 세션 정보 저장(뷰에서 표기용)
             session.setAttribute("userId", user.getId());
             session.setAttribute("username", user.getUsername());
+            session.setAttribute("role", user.getRole() == null || user.getRole().isBlank() ? "USER" : user.getRole());
 
-            return "redirect:/board/list";
+            // SecurityContext에 인증 토큰 저장(권한: ADMIN/USER)
+            var auth = new UsernamePasswordAuthenticationToken(
+                    user.getUsername(),
+                    null,
+                    List.of(new SimpleGrantedAuthority(user.getRole() == null || user.getRole().isBlank() ? "USER" : user.getRole()))
+            );
+            SecurityContextHolder.getContext().setAuthentication(auth);
+            // 세션에 보존
+            new HttpSessionSecurityContextRepository()
+                    .saveContext(SecurityContextHolder.getContext(), request, response);
+
+            // SavedRequest로 리다이렉트
+            RequestCache requestCache = new HttpSessionRequestCache();
+            SavedRequest saved = requestCache.getRequest(request, response);
+            String target = (saved != null) ? saved.getRedirectUrl() : "/fan";
+            if (target == null || target.contains("/error")) {
+                target = "/fan";
+            }
+            String sep = target.contains("?") ? "&" : "?";
+            return "redirect:" + target + sep + "login=success";
         } else {
             // 로그인 실패 시 에러 메시지 표시
             model.addAttribute("errorMessage", "사용자 이름 또는 비밀번호가 올바르지 않습니다.");
@@ -128,7 +166,7 @@ public class UserController {
      */
     @PostMapping("/api/login")
     @ResponseBody
-    public ResponseDto<UserDto.Response> loginApi(@Valid @RequestBody UserDto.LoginRequest loginRequest,
+    public ResponseDto<UserDto.AuthResponse> loginApi(@Valid @RequestBody UserDto.LoginRequest loginRequest,
                                                   HttpSession session) {
         Optional<User> userOptional = userService.login(loginRequest);
 
@@ -137,13 +175,23 @@ public class UserController {
             session.setAttribute("userId", user.getId());
             session.setAttribute("username", user.getUsername());
 
-            UserDto.Response response = new UserDto.Response(
+            // SecurityContext에도 동일하게 설정(웹 화면 접근 호환)
+            var auth = new UsernamePasswordAuthenticationToken(
+                    user.getUsername(),
+                    null,
+                    List.of(new SimpleGrantedAuthority(user.getRole() == null || user.getRole().isBlank() ? "USER" : user.getRole()))
+            );
+            SecurityContextHolder.getContext().setAuthentication(auth);
+
+            String token = jwtUtil.generateToken(user.getUsername(), user.getRole());
+            UserDto.AuthResponse response = new UserDto.AuthResponse(
                     user.getId(),
                     user.getUsername(),
                     user.getName(),
-                    user.getEmail()
+                    user.getEmail(),
+                    user.getRole(),
+                    token
             );
-
             return ResponseDto.success("로그인이 완료되었습니다.", response);
         } else {
             return ResponseDto.fail("사용자 이름 또는 비밀번호가 올바르지 않습니다.");

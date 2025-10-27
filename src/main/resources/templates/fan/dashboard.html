@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/default :: layout(~{::title}, ~{::section}) }">
+<head>
+    <title>Fan Control Dashboard</title>
+</head>
+<body>
+<section>
+    <div class="card shadow-sm p-4">
+        <h2 class="text-center mb-4">Fan Control Dashboard</h2>
+        <div class="row g-3 kpi-grid">
+            <div class="col-6 col-md-3">
+                <div class="card kpi">
+                    <div class="card-body text-center">
+                        <div class="kpi-title">CPU Temperature</div>
+                        <div class="kpi-value" id="cpuTemp">-- °C</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card kpi">
+                    <div class="card-body text-center">
+                        <div class="kpi-title">GPU Temperature</div>
+                        <div class="kpi-value" id="gpuTemp">-- °C</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card kpi">
+                    <div class="card-body text-center">
+                        <div class="kpi-title">Model Result</div>
+                        <div class="kpi-value" id="modelResult">--</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card kpi">
+                    <div class="card-body text-center">
+                        <div class="kpi-title">Set Fan PWM</div>
+                        <div class="kpi-value" id="setPwm">-- %</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card kpi">
+                    <div class="card-body text-center">
+                        <div class="kpi-title">Actual Fan PWM</div>
+                        <div class="kpi-value" id="actualPwm">-- %</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm p-4 mt-4">
+        <h4 class="mb-3 text-center">Fan Control</h4>
+        <div class="row align-items-center g-3">
+            <div class="col-12 col-md-4">
+                <label for="controlMode" class="form-label mb-1">Control Mode:</label>
+                <select id="controlMode" aria-labelledby="controlMode" class="form-select">
+                    <option value="AUTOMATIC">Automatic</option>
+                    <option value="MANUAL" th:if="${session.role == 'ADMIN'}">Manual</option>
+                </select>
+                <div class="form-text" th:if="${session.role != 'ADMIN'}">수동 제어는 관리자만 사용할 수 있습니다.</div>
+            </div>
+            <div class="col-12 col-md-8" id="manualControls" style="display:none;">
+                <label for="pwmRange" class="form-label mb-1">Set PWM: <span id="pwmLabel">0%</span></label>
+                <input type="range" class="form-range" min="0" max="100" step="1" id="pwmRange"/>
+                <label for="pwmNumber" class="visually-hidden">Set PWM Number</label>
+                <input type="number" aria-labelledby="pwmNumber" class="form-control mt-2" id="pwmNumber" min="0" max="100" step="1"/>
+                <button id="applyBtn" class="btn btn-primary mt-2">Apply</button>
+            </div>
+        </div>
+    </div>
+</section>
+<script th:src="@{/js/fan.js}"></script>
+</body>
+</html>

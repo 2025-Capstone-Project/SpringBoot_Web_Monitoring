@@ -32,6 +32,7 @@ public class UserRepositoryImpl implements UserRepository {
         user.setPassword(rs.getString("password"));
         user.setName(rs.getString("name"));
         user.setEmail(rs.getString("email"));
+        user.setRole(rs.getString("role"));
         user.setCreatedAt(rs.getTimestamp("created_at").toLocalDateTime());
         user.setUpdatedAt(rs.getTimestamp("updated_at").toLocalDateTime());
         return user;
@@ -51,11 +52,11 @@ public class UserRepositoryImpl implements UserRepository {
     }
 
     /**
-     * 사용자 등록 메서드 (H2 DB에 맞게 KeyHolder 처리)
+     * 사용자 등록 메서드
      */
     private User insertUser(User user) {
-        String sql = "INSERT INTO users (username, password, name, email, created_at, updated_at) " +
-                "VALUES (?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO users (username, password, name, email, role, created_at, updated_at) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?)";
 
         KeyHolder keyHolder = new GeneratedKeyHolder();
         LocalDateTime now = LocalDateTime.now();
@@ -66,8 +67,9 @@ public class UserRepositoryImpl implements UserRepository {
             ps.setString(2, user.getPassword());
             ps.setString(3, user.getName());
             ps.setString(4, user.getEmail());
-            ps.setTimestamp(5, Timestamp.valueOf(now));
+            ps.setString(5, user.getRole());
             ps.setTimestamp(6, Timestamp.valueOf(now));
+            ps.setTimestamp(7, Timestamp.valueOf(now));
             return ps;
         }, keyHolder);
 

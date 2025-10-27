@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // 폼 유효성 검사 강화
+    // 폼 유효성 검사
     const forms = document.querySelectorAll('form');
     forms.forEach(form => {
         form.addEventListener('submit', function(event) {

@@ -12,6 +12,7 @@ public class User {
     private String password;
     private String name;
     private String email;
+    private String role;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -20,13 +21,14 @@ public class User {
     }
 
     // 모든 필드를 포함한 생성자
-    public User(Long id, String username, String password, String name, String email,
+    public User(Long id, String username, String password, String name, String email, String role,
                 LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
         this.username = username;
         this.password = password;
         this.name = name;
         this.email = email;
+        this.role = role;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -72,6 +74,10 @@ public class User {
         this.email = email;
     }
 
+    public String getRole() { return role; }
+
+    public void setRole(String role) { this.role = role; }
+
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
@@ -95,6 +101,7 @@ public class User {
                 ", username='" + username + '\'' +
                 ", name='" + name + '\'' +
                 ", email='" + email + '\'' +
+                ", role='" + role + '\'' +
                 ", createdAt=" + createdAt +
                 ", updatedAt=" + updatedAt +
                 '}';

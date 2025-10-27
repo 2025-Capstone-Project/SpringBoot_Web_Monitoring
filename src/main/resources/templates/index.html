@@ -2,45 +2,17 @@
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{layout/default :: layout(~{::title}, ~{::section}) }">
 <head>
-    <title>홈 - Spring Boot 예제</title>
+    <title>홈 - Thermal Guardian</title>
 </head>
 <body>
 <section>
     <div class="jumbotron bg-light p-5 rounded">
-        <h1 class="display-4">Spring Boot 웹 애플리케이션 예제</h1>
-        <p class="lead">Spring Boot, JdbcTemplate, H2 데이터베이스를 활용한 웹 애플리케이션 예제입니다.</p>
+        <h1 class="display-4">Thermal Guardian</h1>
+        <p class="lead">YOLO 기반 이상 감지와 PWM 제어로 서버/컴퓨터의 열을 지능적으로 관리합니다.</p>
         <hr class="my-4">
-        <p>회원가입, 로그인, 게시판 기능을 제공합니다.</p>
-        <a class="btn btn-primary btn-lg" th:href="@{/board/list}" role="button">게시판 바로가기</a>
-    </div>
-
-    <div class="row mt-5">
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">회원 관리</h5>
-                    <p class="card-text">회원가입 및 로그인 기능을 제공합니다.</p>
-                    <a th:href="@{/user/register}" class="btn btn-outline-primary">회원가입</a>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">게시판</h5>
-                    <p class="card-text">게시글 작성, 조회, 수정, 삭제 기능을 제공합니다.</p>
-                    <a th:href="@{/board/list}" class="btn btn-outline-primary">게시판</a>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">H2 콘솔</h5>
-                    <p class="card-text">H2 데이터베이스 콘솔에 접속할 수 있습니다.</p>
-                    <a th:href="@{/h2-console}" class="btn btn-outline-primary">H2 콘솔</a>
-                </div>
-            </div>
+        <div class="d-flex gap-2">
+            <a class="btn btn-primary btn-lg" th:href="@{/fan}" role="button">Fan Dashboard</a>
+            <a class="btn btn-outline-secondary btn-lg" th:href="@{/board/list}" role="button">Q&A Board</a>
         </div>
     </div>
 </section>
