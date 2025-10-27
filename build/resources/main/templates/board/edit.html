@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/default :: layout(~{::title}, ~{::section}) }">
+<head>
+    <title>글 수정 - Spring Boot 예제</title>
+</head>
+<body>
+<section>
+    <h2 class="mb-4">글 수정</h2>
+
+    <!-- 에러 메시지 표시 -->
+    <div class="alert alert-danger" th:if="${errorMessage != null}" th:text="${errorMessage}"></div>
+
+    <form th:action="@{/board/edit/{id}(id=${boardId})}" th:object="${boardRequest}" method="post">
+        <div class="mb-3">
+            <label for="title" class="form-label">제목</label>
+            <input type="text" class="form-control" id="title" th:field="*{title}" required>
+            <div class="text-danger" th:if="${#fields.hasErrors('title')}" th:errors="*{title}"></div>
+        </div>
+        <div class="mb-3">
+            <label for="content" class="form-label">내용</label>
+            <textarea class="form-control" id="content" th:field="*{content}" rows="10" required></textarea>
+            <div class="text-danger" th:if="${#fields.hasErrors('content')}" th:errors="*{content}"></div>
+        </div>
+        <div class="d-flex justify-content-between">
+            <button type="submit" class="btn btn-primary">수정</button>
+            <a th:href="@{/board/view/{id}(id=${boardId})}" class="btn btn-secondary">취소</a>
+        </div>
+    </form>
+</section>
+</body>
+</html>

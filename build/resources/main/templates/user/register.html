@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/default :: layout(~{::title}, ~{::section}) }">
+<head>
+    <title>회원가입 - Spring Boot 예제</title>
+</head>
+<body>
+<section>
+    <h2 class="mb-4">회원가입</h2>
+
+    <!-- 에러 메시지 표시 -->
+    <div class="alert alert-danger" th:if="${errorMessage != null}" th:text="${errorMessage}"></div>
+
+    <form th:action="@{/user/register}" th:object="${registerRequest}" method="post">
+        <div class="mb-3">
+            <label for="username" class="form-label">사용자 이름</label>
+            <input type="text" class="form-control" id="username" th:field="*{username}" required>
+            <div class="text-danger" th:if="${#fields.hasErrors('username')}" th:errors="*{username}"></div>
+        </div>
+        <div class="mb-3">
+            <label for="password" class="form-label">비밀번호</label>
+            <input type="password" class="form-control" id="password" th:field="*{password}" required>
+            <div class="text-danger" th:if="${#fields.hasErrors('password')}" th:errors="*{password}"></div>
+        </div>
+        <div class="mb-3">
+            <label for="name" class="form-label">이름</label>
+            <input type="text" class="form-control" id="name" th:field="*{name}" required>
+            <div class="text-danger" th:if="${#fields.hasErrors('name')}" th:errors="*{name}"></div>
+        </div>
+        <div class="mb-3">
+            <label for="email" class="form-label">이메일</label>
+            <input type="email" class="form-control" id="email" th:field="*{email}" required>
+            <div class="text-danger" th:if="${#fields.hasErrors('email')}" th:errors="*{email}"></div>
+        </div>
+        <button type="submit" class="btn btn-primary">회원가입</button>
+        <a th:href="@{/user/login}" class="btn btn-link">이미 계정이 있으신가요? 로그인</a>
+    </form>
+</section>
+</body>
+</html>

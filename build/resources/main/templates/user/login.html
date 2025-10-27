@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/default :: layout(~{::title}, ~{::section}) }">
+<head>
+    <title>로그인 - Thermal Guardian</title>
+</head>
+<body>
+<section>
+    <h2 class="mb-4">로그인</h2>
+
+    <!-- 알림 메시지 표시 -->
+    <div class="alert alert-success" th:if="${param.registered}">회원가입이 완료되었습니다. 로그인해주세요.</div>
+    <div class="alert alert-success" th:if="${param.logout}">로그아웃되었습니다.</div>
+    <div class="alert alert-success" th:if="${param.login}">로그인에 성공했습니다.</div>
+
+    <!-- 에러 메시지 표시 -->
+    <div class="alert alert-danger" th:if="${errorMessage != null}" th:text="${errorMessage}"></div>
+
+    <form th:action="@{/user/login}" th:object="${loginRequest}" method="post">
+        <div class="mb-3">
+            <label for="username" class="form-label">사용자 이름</label>
+            <input type="text" class="form-control" id="username" th:field="*{username}" required>
+            <div class="text-danger" th:if="${#fields.hasErrors('username')}" th:errors="*{username}"></div>
+        </div>
+        <div class="mb-3">
+            <label for="password" class="form-label">비밀번호</label>
+            <input type="password" class="form-control" id="password" th:field="*{password}" required>
+            <div class="text-danger" th:if="${#fields.hasErrors('password')}" th:errors="*{password}"></div>
+        </div>
+        <button type="submit" class="btn btn-primary">로그인</button>
+        <a th:href="@{/user/register}" class="btn btn-link">계정이 없으신가요? 회원가입</a>
+    </form>
+</section>
+<script>
+    // 토스트: URL 파라미터 login=success 시 표시
+    (function(){
+      const params = new URLSearchParams(window.location.search);
+      if(params.has('login')){
+        const toast = document.createElement('div');
+        toast.textContent = '로그인 성공! 대시보드로 이동합니다.';
+        toast.style.cssText = 'position:fixed;right:16px;bottom:16px;background:#0ea5e9;color:#fff;padding:12px 16px;border-radius:8px;box-shadow:0 6px 16px rgba(2,6,23,.2);z-index:9999;opacity:0;transition:opacity .3s ease';
+        document.body.appendChild(toast);
+        requestAnimationFrame(()=>{ toast.style.opacity = '1'; });
+        setTimeout(()=>{ toast.style.opacity='0'; setTimeout(()=>toast.remove(),300); }, 1800);
+      }
+    })();
+</script>
+</body>
+</html>

@@ -39,17 +39,17 @@ public class SecurityConfig {
                         .requestMatchers("/user/register", "/user/login").permitAll()
                         .requestMatchers("/user/api/register", "/user/api/login").permitAll()
                         .requestMatchers("/css/**", "/js/**").permitAll()
-                        // Q&A: GET 공개, 그 외 인증 필요
                         .requestMatchers(HttpMethod.GET, "/qa/**").permitAll()
                         .requestMatchers("/qa/**").authenticated()
-                        // 팬 대시보드 및 API는 인증 필요
-                        .requestMatchers("/fan/**", "/api/fan/**").authenticated()
+                        // 화면용 세션 인증 경로
+                        .requestMatchers("/web/**", "/fan").authenticated()
+                        // API는 인증 필요(JWT 필터가 없는 토큰 차단)
+                        .requestMatchers("/api/**").authenticated()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(new LoginUrlAuthenticationEntryPoint("/user/login"))
                 )
-                // 기본 formLogin/httpBasic 비활성화(커스텀 로그인만 사용)
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
                 .logout(logout -> logout.logoutUrl("/user/logout").logoutSuccessUrl("/user/login?logout"));

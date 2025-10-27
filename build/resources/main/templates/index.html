@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/default :: layout(~{::title}, ~{::section}) }">
+<head>
+    <title>홈 - Thermal Guardian</title>
+</head>
+<body>
+<section>
+    <div class="jumbotron bg-light p-5 rounded">
+        <h1 class="display-4">Thermal Guardian</h1>
+        <p class="lead">YOLO 기반 이상 감지와 PWM 제어로 서버/컴퓨터의 열을 지능적으로 관리합니다.</p>
+        <hr class="my-4">
+        <div class="d-flex gap-2">
+            <a class="btn btn-primary btn-lg" th:href="@{/fan}" role="button">Fan Dashboard</a>
+            <a class="btn btn-outline-secondary btn-lg" th:href="@{/board/list}" role="button">Q&A Board</a>
+        </div>
+    </div>
+</section>
+</body>
+</html>

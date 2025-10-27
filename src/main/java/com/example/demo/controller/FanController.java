@@ -1,8 +1,10 @@
 package com.example.demo.controller;
 
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.time.Instant;
 import java.util.Map;
@@ -85,5 +87,39 @@ public class FanController {
         s.gpuTemp = Math.max(30, Math.min(90, s.gpuTemp + (int) Math.signum(50 - s.setPwm)));
         s.modelCode = (s.cpuTemp > 60 || s.gpuTemp > 60) ? 1 : 0;
         return ResponseEntity.ok(telemetry());
+    }
+
+    @GetMapping(value = "/api/fan/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @ResponseBody
+    public SseEmitter stream() {
+        SseEmitter emitter = new SseEmitter(0L); // no timeout
+        new Thread(() -> {
+            try {
+                while (true) {
+                    Map<String, Object> data = telemetry();
+                    emitter.send(SseEmitter.event().name("telemetry").data(data));
+                    Thread.sleep(1000);
+                }
+            } catch (Exception e) {
+                try { emitter.complete(); } catch (Exception ignored) {}
+            }
+        }, "telemetry-sse").start();
+        return emitter;
+    }
+
+    // 세션 기반 WEB 엔드포인트
+    @GetMapping("/web/fan/telemetry")
+    @ResponseBody
+    public Map<String, Object> webTelemetry() { return telemetry(); }
+
+    @GetMapping(value = "/web/fan/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @ResponseBody
+    public SseEmitter webStream() { return stream(); }
+
+    @PostMapping("/web/fan/control")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> webControl(@RequestBody Map<String, Object> body) {
+        // 동일한 권한 검사 로직을 활용하기 위해 내부로 위임
+        return control(body);
     }
 }

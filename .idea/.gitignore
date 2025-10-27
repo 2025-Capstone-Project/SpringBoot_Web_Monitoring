@@ -1,0 +1,36 @@
+### IntelliJ
+.idea/
+*.iml
+
+### Gradle
+.gradle/
+build/
+**/build/
+out/
+
+### Spring Boot Logs
+*.log
+logs/
+
+### Environment config (Keep secret!)
+application-local.yml
+application-local.properties
+.env
+
+### JVM / Java
+*.class
+*.jar
+*.war
+*.ear
+
+### Temporary
+*.tmp
+*.swp
+*.swo
+*.lock
+*.bin
+
+### OS Junk
+.DS_Store
+Thumbs.db
+Desktop.ini

@@ -19,7 +19,7 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
-    // 생성자 주입
+    // 생성자
     public UserServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
@@ -44,7 +44,6 @@ public class UserServiceImpl implements UserService {
             throw new IllegalArgumentException("이미 사용 중인 이메일입니다.");
         }
 
-        // 실전 예제!!!
         if ("admin".equalsIgnoreCase(registerRequest.getUsername())) {
             throw new IllegalArgumentException("admin은 사용할 수 없는 사용자 이름입니다.");
         }
