@@ -143,7 +143,11 @@ public class QaRepository {
         jdbc.update("UPDATE questions SET status='RESOLVED', selected_answer_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", aid, qid);
     }
 
+    // 조회수 증가
+    public void incrementViews(Long id){
+        jdbc.update("UPDATE questions SET views = views + 1 WHERE id=?", id);
+    }
+
     public void deleteQuestion(Long id){ jdbc.update("DELETE FROM questions WHERE id=?", id); }
     public void deleteAnswer(Long id){ jdbc.update("DELETE FROM answers WHERE id=?", id); }
 }
-

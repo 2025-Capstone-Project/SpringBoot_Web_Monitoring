@@ -3,6 +3,7 @@ package com.example.demo.controller;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -13,10 +14,14 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Controller
 @RequestMapping
 public class FanController {
+
+    private static final Logger log = LoggerFactory.getLogger(FanController.class);
 
     // 단순 데모/프런트 개발용 인메모리 상태
     private static class State {
@@ -31,7 +36,13 @@ public class FanController {
     private final AtomicReference<State> ref = new AtomicReference<>(new State());
 
     @GetMapping("/fan")
-    public String dashboard() {
+    public String dashboard(Model model) {
+        State s = ref.get();
+        model.addAttribute("currentMode", s.mode);
+        model.addAttribute("currentSetPwm", s.setPwm);
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        boolean isAdmin = auth != null && auth.getAuthorities().stream().anyMatch(a -> "ADMIN".equals(a.getAuthority()));
+        model.addAttribute("isAdmin", isAdmin);
         return "fan/dashboard";
     }
 
@@ -55,25 +66,27 @@ public class FanController {
 
     @PostMapping("/api/fan/control")
     @ResponseBody
-    @PreAuthorize("hasAuthority('ADMIN') or (#body != null and #body['mode'] != 'MANUAL')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Map<String, Object>> control(@RequestBody Map<String, Object> body) {
         State s = ref.get();
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String user = auth != null ? String.valueOf(auth.getName()) : "anonymous";
+        boolean isAdmin = auth != null && auth.getAuthorities().stream().anyMatch(a -> "ADMIN".equals(a.getAuthority()));
         Object modeObj = body.get("mode");
+        log.info("/api/fan/control called by user={}, isAdmin={}, body={} (currentMode={})", user, isAdmin, body, s.mode);
+
         if (modeObj instanceof String m) {
             String requested = m.equalsIgnoreCase("manual") ? "MANUAL" : "AUTOMATIC";
-            // MANUAL은 관리자만 허용
-            if ("MANUAL".equals(requested)) {
-                Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-                boolean isAdmin = auth != null && auth.getAuthorities().stream().anyMatch(a -> "ADMIN".equals(a.getAuthority()));
-                if (!isAdmin) {
-                    return ResponseEntity.status(403).body(Map.of(
-                            "error", "MANUAL mode requires ADMIN",
-                            "mode", s.mode,
-                            "message", "관리자만 수동 제어가 가능합니다"
-                    ));
-                }
+            if ("MANUAL".equals(requested) && !isAdmin) {
+                log.warn("Manual request denied for user={}", user);
+                return ResponseEntity.status(403).body(Map.of(
+                        "error", "MANUAL mode requires ADMIN",
+                        "mode", s.mode,
+                        "message", "관리자만 수동 제어가 가능합니다"
+                ));
             }
             s.mode = requested;
+            log.info("Mode changed to {} by user={}", s.mode, user);
         }
         if ("MANUAL".equals(s.mode)) {
             Object pwmObj = body.get("pwm");
@@ -81,6 +94,7 @@ public class FanController {
                 int v = Math.max(0, Math.min(100, n.intValue()));
                 s.setPwm = v;
                 s.actualPwm = Math.max(0, Math.min(100, (s.actualPwm + v) / 2));
+                log.info("PWM set to {} by user={}", s.setPwm, user);
             }
         }
         s.cpuTemp = Math.max(30, Math.min(90, s.cpuTemp + (int) Math.signum(50 - s.setPwm)));
@@ -118,6 +132,7 @@ public class FanController {
 
     @PostMapping("/web/fan/control")
     @ResponseBody
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Map<String, Object>> webControl(@RequestBody Map<String, Object> body) {
         // 동일한 권한 검사 로직을 활용하기 위해 내부로 위임
         return control(body);

@@ -29,6 +29,8 @@ public class QaController {
 
     @GetMapping("/{id}")
     public String view(@PathVariable Long id, Model model){
+        // 조회수 증가
+        service.incrementViews(id);
         Question question = service.findQuestion(id).orElse(null);
         List<Answer> answers = service.findAnswers(id);
         model.addAttribute("question", question);
@@ -75,4 +77,3 @@ public class QaController {
         return "redirect:/qa/"+qid;
     }
 }
-

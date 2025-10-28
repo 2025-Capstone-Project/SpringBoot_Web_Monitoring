@@ -22,5 +22,7 @@ public class QaService {
     public void selectAnswer(Long qid, Long aid){ repo.selectAnswer(qid, aid); }
     public void deleteQuestion(Long id){ repo.deleteQuestion(id); }
     public void deleteAnswer(Long id){ repo.deleteAnswer(id); }
-}
 
+    // 조회수 증가
+    public void incrementViews(Long id){ repo.incrementViews(id); }
+}
