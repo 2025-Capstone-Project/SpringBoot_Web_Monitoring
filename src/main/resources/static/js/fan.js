@@ -14,6 +14,24 @@
     const applyBtn = el('applyBtn');
     const serverModeBadge = el('serverModeBadge');
 
+    // 편집 중 덮어쓰기 방지 플래그
+    const editing = { pwm: false };
+    let editingTimer = null;
+    let pendingPwm = null; // Apply 전까지 사용자가 의도한 값
+
+    const setEditing = (on)=>{
+      editing.pwm = !!on;
+      if (editingTimer) { clearTimeout(editingTimer); editingTimer = null; }
+      if (editing.pwm) {
+        editingTimer = setTimeout(()=>{
+          editing.pwm = false;
+          pendingPwm = null; // 편집 보류 해제
+          console.log('[fan] editing timeout -> revert to server value');
+          try { fetchTelemetry(); } catch(e) {}
+        }, 10000); // 10s idle 후 자동 해제
+      }
+    };
+
     if (!modeSel) {
       console.warn('[fan] elements not ready yet. retry...');
       setTimeout(init, 100); return;
@@ -76,12 +94,17 @@
         console.log('[fan] mode reflect from server ->', serverMode);
         modeSel.value = serverMode;
       }
+      // 모드 전환 시 보류값 정리
+      if (serverMode !== 'MANUAL') { pendingPwm = null; }
       updateManualVisibility();
       setBadge(serverMode);
       if (serverMode === 'MANUAL') {
-        if (pwmRange) pwmRange.value = data.setPwm;
-        if (pwmNum) pwmNum.value = data.setPwm;
-        if (pwmLabel) pwmLabel.textContent = `${data.setPwm}%`;
+        // 편집 중이거나 보류 값이 있으면 서버값으로 덮어쓰지 않음
+        if (!editing.pwm && pendingPwm === null) {
+          if (pwmRange) pwmRange.value = data.setPwm;
+          if (pwmNum) pwmNum.value = data.setPwm;
+          if (pwmLabel) pwmLabel.textContent = `${data.setPwm}%`;
+        }
       }
       if (cpu) countUp(cpu, v=>`${v} °C`, data.cpuTemp);
       if (gpu) countUp(gpu, v=>`${v} °C`, data.gpuTemp);
@@ -118,6 +141,9 @@
           return fetchTelemetry();
         }
         const data = await res.json();
+        // 보류 해제: 서버값 반영 허용
+        setEditing(false);
+        pendingPwm = null;
         render(data);
       } catch(err){ console.error('[fan] control error:', err); fetchTelemetry(); }
     }
@@ -153,12 +179,34 @@
     modeSel.addEventListener('change', ()=>{
       console.log('[fan] modeSel change ->', modeSel.value);
       if (guardModeChange()) return;
+      // 모드 변경 시 보류값 초기화
+      pendingPwm = null;
       updateManualVisibility();
       sendControl();
     });
-    if (pwmRange) pwmRange.addEventListener('input', ()=>{ if (!pwmNum||!pwmLabel) return; pwmNum.value = pwmRange.value; pwmLabel.textContent = `${pwmRange.value}%`; });
-    if (pwmNum) pwmNum.addEventListener('input', ()=>{ if (!pwmRange||!pwmLabel) return; const v = Math.max(0, Math.min(100, Number(pwmNum.value)||0)); pwmNum.value = v; pwmRange.value = v; pwmLabel.textContent = `${v}%`; });
-    if (applyBtn) applyBtn.addEventListener('click', sendControl);
+    if (pwmRange) {
+      pwmRange.addEventListener('input', ()=>{
+        setEditing(true);
+        if (!pwmNum||!pwmLabel) return;
+        pwmNum.value = pwmRange.value;
+        pwmLabel.textContent = `${pwmRange.value}%`;
+        pendingPwm = Number(pwmRange.value);
+      });
+      // pointerup/blur/change 시 즉시 해제하지 않음
+    }
+    if (pwmNum) {
+      pwmNum.addEventListener('input', ()=>{
+        setEditing(true);
+        if (!pwmRange||!pwmLabel) return;
+        const v = Math.max(0, Math.min(100, Number(pwmNum.value)||0));
+        pwmNum.value = v;
+        pwmRange.value = v;
+        pwmLabel.textContent = `${v}%`;
+        pendingPwm = v;
+      });
+      // focus/blur/change로 편집 상태를 즉시 종료하지 않음
+    }
+    if (applyBtn) applyBtn.addEventListener('click', ()=>{ setEditing(false); sendControl(); });
 
     // 시작: 초기 동기화 1회 + SSE 우선, 불가 시 폴링
     fetchTelemetry();
