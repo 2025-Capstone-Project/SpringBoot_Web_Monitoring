@@ -1,6 +1,6 @@
 // 페이지 로드 시 실행
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Spring Boot 예제 애플리케이션이 로드되었습니다.');
+    console.log('서버 모니터링 시스템 웹페이지입니다.');
 
     // 현재 활성화된 네비게이션 링크에 active 클래스 추가
     const currentPath = window.location.pathname;
