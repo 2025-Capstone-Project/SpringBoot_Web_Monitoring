@@ -26,11 +26,13 @@ public class FanController {
     // 단순 데모/프런트 개발용 인메모리 상태
     private static class State {
         String mode = "AUTOMATIC"; // AUTOMATIC | MANUAL
-        int setPwm = 15;            // 사용자가 설정한 PWM (자동 모드에선 제어 로직이 설정했다고 가정)
-        int actualPwm = 12;         // 실제 팬 PWM (하드웨어 피드백)
+        int setPwm = 15;            // 지정 PWM
+        int actualPwm = 12;         // 실제 PWM
         int cpuTemp = 48;
         int gpuTemp = 47;
         int modelCode = 1;          // 0: Normal, 1: Abnormal
+        int cpuThreshold = 60;      // 비정상 판단 임계(자동 모드 기준)
+        int gpuThreshold = 60;      // 비정상 판단 임계(자동 모드 기준)
     }
 
     private final AtomicReference<State> ref = new AtomicReference<>(new State());
@@ -40,6 +42,8 @@ public class FanController {
         State s = ref.get();
         model.addAttribute("currentMode", s.mode);
         model.addAttribute("currentSetPwm", s.setPwm);
+        model.addAttribute("cpuThreshold", s.cpuThreshold);
+        model.addAttribute("gpuThreshold", s.gpuThreshold);
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         boolean isAdmin = auth != null && auth.getAuthorities().stream().anyMatch(a -> "ADMIN".equals(a.getAuthority()));
         model.addAttribute("isAdmin", isAdmin);
@@ -60,7 +64,9 @@ public class FanController {
                 ),
                 "setPwm", s.setPwm,
                 "actualPwm", s.actualPwm,
-                "mode", s.mode
+                "mode", s.mode,
+                "cpuThreshold", s.cpuThreshold,
+                "gpuThreshold", s.gpuThreshold
         );
     }
 
@@ -72,36 +78,57 @@ public class FanController {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String user = auth != null ? String.valueOf(auth.getName()) : "anonymous";
         boolean isAdmin = auth != null && auth.getAuthorities().stream().anyMatch(a -> "ADMIN".equals(a.getAuthority()));
-        Object modeObj = body.get("mode");
-        log.info("/api/fan/control called by user={}, isAdmin={}, body={} (currentMode={})", user, isAdmin, body, s.mode);
 
-        if (modeObj instanceof String m) {
-            String requested = m.equalsIgnoreCase("manual") ? "MANUAL" : "AUTOMATIC";
-            if ("MANUAL".equals(requested) && !isAdmin) {
-                log.warn("Manual request denied for user={}", user);
+        String dimension = String.valueOf(body.getOrDefault("dimension", "SPEED")).toUpperCase();
+        log.info("/api/fan/control user={}, isAdmin={}, dim={}, body={} (mode={})", user, isAdmin, dimension, body, s.mode);
+
+        if ("TEMP".equals(dimension)) {
+            if (!isAdmin) {
                 return ResponseEntity.status(403).body(Map.of(
-                        "error", "MANUAL mode requires ADMIN",
+                        "error", "TEMP threshold requires ADMIN",
                         "mode", s.mode,
-                        "message", "관리자만 수동 제어가 가능합니다"
+                        "cpuThreshold", s.cpuThreshold,
+                        "gpuThreshold", s.gpuThreshold
                 ));
             }
-            s.mode = requested;
-            log.info("Mode changed to {} by user={}", s.mode, user);
-        }
-        if ("MANUAL".equals(s.mode)) {
-            Object pwmObj = body.get("pwm");
-            if (pwmObj instanceof Number n) {
-                int v = Math.max(0, Math.min(100, n.intValue()));
-                s.setPwm = v;
-                s.actualPwm = Math.max(0, Math.min(100, (s.actualPwm + v) / 2));
-                log.info("PWM set to {} by user={}", s.setPwm, user);
+            Object cObj = body.get("cpuThreshold");
+            Object gObj = body.get("gpuThreshold");
+            if (cObj instanceof Number cn) s.cpuThreshold = clamp(cn.intValue(), 30, 100);
+            if (gObj instanceof Number gn) s.gpuThreshold = clamp(gn.intValue(), 30, 100);
+        } else {
+            // SPEED
+            Object modeObj = body.get("mode");
+            if (modeObj instanceof String m) {
+                String requested = m.equalsIgnoreCase("manual") ? "MANUAL" : "AUTOMATIC";
+                if ("MANUAL".equals(requested) && !isAdmin) {
+                    log.warn("Manual request denied for user={}", user);
+                    return ResponseEntity.status(403).body(Map.of(
+                            "error", "MANUAL mode requires ADMIN",
+                            "mode", s.mode,
+                            "message", "관리자만 수동 제어가 가능합니다"
+                    ));
+                }
+                s.mode = requested;
+                log.info("Mode changed to {} by user={}", s.mode, user);
+            }
+            if ("MANUAL".equals(s.mode)) {
+                Object pwmObj = body.get("pwm");
+                if (pwmObj instanceof Number n) {
+                    int v = clamp(n.intValue(), 0, 100);
+                    s.setPwm = v;
+                    s.actualPwm = clamp((s.actualPwm + v) / 2, 0, 100);
+                    log.info("PWM set to {} by user={}", s.setPwm, user);
+                }
             }
         }
-        s.cpuTemp = Math.max(30, Math.min(90, s.cpuTemp + (int) Math.signum(50 - s.setPwm)));
-        s.gpuTemp = Math.max(30, Math.min(90, s.gpuTemp + (int) Math.signum(50 - s.setPwm)));
-        s.modelCode = (s.cpuTemp > 60 || s.gpuTemp > 60) ? 1 : 0;
+        // 단순 시뮬: 온도/모델 업데이트
+        s.cpuTemp = clamp(s.cpuTemp + (int) Math.signum(50 - s.setPwm), 30, 90);
+        s.gpuTemp = clamp(s.gpuTemp + (int) Math.signum(50 - s.setPwm), 30, 90);
+        s.modelCode = (s.cpuTemp > s.cpuThreshold || s.gpuTemp > s.gpuThreshold) ? 1 : 0;
         return ResponseEntity.ok(telemetry());
     }
+
+    private int clamp(int v, int lo, int hi){ return Math.max(lo, Math.min(hi, v)); }
 
     @GetMapping(value = "/api/fan/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @ResponseBody

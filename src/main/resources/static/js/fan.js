@@ -6,29 +6,59 @@
     const model = el('modelResult');
     const setPwm = el('setPwm');
     const actualPwm = el('actualPwm');
+
+    // 속도 제어 영역
     const modeSel = el('controlMode');
-    const manualWrap = el('manualControls');
+    const speedWrap = el('manualControlsSpeed');
     const pwmRange = el('pwmRange');
     const pwmNum = el('pwmNumber');
     const pwmLabel = el('pwmLabel');
     const applyBtn = el('applyBtn');
+
+    // 온도 임계 제어 영역
+    const tempWrap = el('manualControlsTemp');
+    const cpuThRange = el('cpuThreshold');
+    const cpuThNum = el('cpuThresholdNum');
+    const gpuThRange = el('gpuThreshold');
+    const gpuThNum = el('gpuThresholdNum');
+    const applyTempBtn = el('applyTempBtn');
+
     const serverModeBadge = el('serverModeBadge');
 
-    // 편집 중 덮어쓰기 방지 플래그
-    const editing = { pwm: false };
-    let editingTimer = null;
-    let pendingPwm = null; // Apply 전까지 사용자가 의도한 값
+    // 라디오(표시 토글)
+    const dimSpeed = document.getElementById('dimSpeed');
+    const dimTemp = document.getElementById('dimTemp');
+    const dimensionGroup = document.getElementById('dimensionGroup');
 
-    const setEditing = (on)=>{
+    // 편집 중 덮어쓰기 방지 + 보류값
+    const editing = { pwm: false, temp: false };
+    let editingTimerPwm = null;
+    let editingTimerTemp = null;
+    let pendingPwm = null; // Apply 전까지 사용자가 의도한 PWM
+    let pendingCpu = null, pendingGpu = null; // Apply 전까지 임계치 보류값
+
+    const setEditingPwm = (on)=>{
       editing.pwm = !!on;
-      if (editingTimer) { clearTimeout(editingTimer); editingTimer = null; }
+      if (editingTimerPwm) { clearTimeout(editingTimerPwm); editingTimerPwm = null; }
       if (editing.pwm) {
-        editingTimer = setTimeout(()=>{
+        editingTimerPwm = setTimeout(()=>{
           editing.pwm = false;
-          pendingPwm = null; // 편집 보류 해제
-          console.log('[fan] editing timeout -> revert to server value');
+          pendingPwm = null;
+          console.log('[fan] editing PWM timeout -> revert to server value');
           try { fetchTelemetry(); } catch(e) {}
-        }, 10000); // 10s idle 후 자동 해제
+        }, 10000);
+      }
+    };
+    const setEditingTemp = (on)=>{
+      editing.temp = !!on;
+      if (editingTimerTemp) { clearTimeout(editingTimerTemp); editingTimerTemp = null; }
+      if (editing.temp) {
+        editingTimerTemp = setTimeout(()=>{
+          editing.temp = false;
+          pendingCpu = null; pendingGpu = null;
+          console.log('[fan] editing TEMP timeout -> revert to server value');
+          try { fetchTelemetry(); } catch(e) {}
+        }, 10000);
       }
     };
 
@@ -38,38 +68,58 @@
     }
     console.log('[fan] init OK. adminDisabled=', modeSel.hasAttribute('disabled'));
 
-    function updateManualVisibility(){
-      if (!manualWrap) return;
-      const manual = modeSel.value === 'MANUAL';
-      if (manual) {
-        manualWrap.style.display = '';
-        manualWrap.classList.remove('d-none');
+    // 표시 토글: 모드와 라디오에 따라 모든 UI를 제어
+    function updateVisibility(){
+      const isManual = modeSel.value === 'MANUAL';
+      const isTemp = dimTemp && dimTemp.checked;
+
+      // 라디오 그룹 활성/비활성 및 표시
+      if (dimensionGroup) dimensionGroup.style.display = isManual ? '' : 'none';
+      if (dimSpeed) dimSpeed.disabled = !isManual;
+      if (dimTemp) dimTemp.disabled = !isManual;
+
+      if (!isManual) {
+        if (speedWrap) { speedWrap.style.display = 'none'; speedWrap.classList.add('d-none'); }
+        if (tempWrap)  { tempWrap.style.display  = 'none'; tempWrap.classList.add('d-none'); }
+        return;
+      }
+      // Manual일 때 라디오 선택에 따른 토글
+      if (isTemp) {
+        if (tempWrap)  { tempWrap.style.display  = '';    tempWrap.classList.remove('d-none'); }
+        if (speedWrap) { speedWrap.style.display = 'none'; speedWrap.classList.add('d-none'); }
       } else {
-        manualWrap.style.display = 'none';
-        manualWrap.classList.add('d-none');
+        if (speedWrap) { speedWrap.style.display = '';    speedWrap.classList.remove('d-none'); }
+        if (tempWrap)  { tempWrap.style.display  = 'none'; tempWrap.classList.add('d-none'); }
       }
     }
+
     function setBadge(mode){
       if (!serverModeBadge) return;
       const m = (mode || 'AUTOMATIC').toUpperCase();
       serverModeBadge.innerHTML = `현재 서버 모드: <span class="badge ${m==='MANUAL'?'bg-warning text-dark':'bg-secondary'}">${m}</span>`;
     }
 
+    // 초기값 반영
     try {
       if (window.__initialMode) {
         const m = String(window.__initialMode).toUpperCase();
         modeSel.value = m;
         setBadge(m);
-        updateManualVisibility();
-        if (m === 'MANUAL' && typeof window.__initialSetPwm === 'number') {
-          pwmRange && (pwmRange.value = window.__initialSetPwm);
-          pwmNum && (pwmNum.value = window.__initialSetPwm);
-          pwmLabel && (pwmLabel.textContent = `${window.__initialSetPwm}%`);
-        }
-      } else {
-        updateManualVisibility();
       }
-    } catch (e) { console.warn('[fan] initial render error', e); updateManualVisibility(); }
+      if (typeof window.__initialSetPwm === 'number') {
+        pwmRange && (pwmRange.value = window.__initialSetPwm);
+        pwmNum && (pwmNum.value = window.__initialSetPwm);
+        pwmLabel && (pwmLabel.textContent = `${window.__initialSetPwm}%`);
+      }
+      if (typeof window.__initialCpuTh === 'number') {
+        cpuThRange && (cpuThRange.value = window.__initialCpuTh);
+        cpuThNum && (cpuThNum.value = window.__initialCpuTh);
+      }
+      if (typeof window.__initialGpuTh === 'number') {
+        gpuThRange && (gpuThRange.value = window.__initialGpuTh);
+        gpuThNum && (gpuThNum.value = window.__initialGpuTh);
+      }
+    } catch (e) { console.warn('[fan] initial render error', e); }
 
     function countUp(targetEl, textBuilder, newValue, suffix){
       try{
@@ -94,18 +144,27 @@
         console.log('[fan] mode reflect from server ->', serverMode);
         modeSel.value = serverMode;
       }
-      // 모드 전환 시 보류값 정리
-      if (serverMode !== 'MANUAL') { pendingPwm = null; }
-      updateManualVisibility();
       setBadge(serverMode);
+
+      // 속도 섹션 값 반영(편집 보호 고려)
       if (serverMode === 'MANUAL') {
-        // 편집 중이거나 보류 값이 있으면 서버값으로 덮어쓰지 않음
         if (!editing.pwm && pendingPwm === null) {
           if (pwmRange) pwmRange.value = data.setPwm;
           if (pwmNum) pwmNum.value = data.setPwm;
           if (pwmLabel) pwmLabel.textContent = `${data.setPwm}%`;
         }
       }
+      // 온도 섹션 값 반영(편집 보호 고려)
+      if (!editing.temp && pendingCpu === null && pendingGpu === null) {
+        if (cpuThRange) cpuThRange.value = data.cpuThreshold;
+        if (cpuThNum) cpuThNum.value = data.cpuThreshold;
+        if (gpuThRange) gpuThRange.value = data.gpuThreshold;
+        if (gpuThNum) gpuThNum.value = data.gpuThreshold;
+      }
+
+      // 마지막에 표시 토글을 적용하여 Automatic일 때 확실히 숨김
+      updateVisibility();
+
       if (cpu) countUp(cpu, v=>`${v} °C`, data.cpuTemp);
       if (gpu) countUp(gpu, v=>`${v} °C`, data.gpuTemp);
       const label = data.model?.label ?? 'Unknown';
@@ -118,34 +177,40 @@
     async function fetchTelemetry(){
       try {
         const res = await fetch('/web/fan/telemetry', { headers: { 'Accept': 'application/json' } });
-        if (!res.ok) {
-          console.error('[fan] telemetry HTTP', res.status);
-          return;
-        }
+        if (!res.ok) { console.error('[fan] telemetry HTTP', res.status); return; }
         const data = await res.json();
         render(data);
       } catch(err){ console.error('[fan] telemetry error:', err); }
     }
 
-    async function sendControl(){
-      const body = { mode: modeSel.value };
+    async function sendSpeedControl(){
+      const body = { dimension: 'SPEED', mode: modeSel.value };
       if (modeSel.value === 'MANUAL' && pwmNum) {
         const v = Number(pwmNum.value);
         body.pwm = Math.max(0, Math.min(100, isFinite(v) ? v : 0));
       }
       try {
-        console.log('[fan] send control', body);
+        console.log('[fan] send control (SPEED)', body);
         const res = await fetch('/web/fan/control', { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, body: JSON.stringify(body) });
-        if (!res.ok) {
-          console.error('[fan] control HTTP', res.status);
-          return fetchTelemetry();
-        }
+        if (!res.ok) { console.error('[fan] control HTTP', res.status); return fetchTelemetry(); }
         const data = await res.json();
-        // 보류 해제: 서버값 반영 허용
-        setEditing(false);
-        pendingPwm = null;
-        render(data);
+        setEditingPwm(false); pendingPwm = null; render(data);
       } catch(err){ console.error('[fan] control error:', err); fetchTelemetry(); }
+    }
+
+    async function sendTempControl(){
+      const body = { dimension: 'TEMP' };
+      const c = isFinite(Number(cpuThNum?.value)) ? Number(cpuThNum.value) : Number(cpuThRange?.value);
+      const g = isFinite(Number(gpuThNum?.value)) ? Number(gpuThNum.value) : Number(gpuThRange?.value);
+      body.cpuThreshold = Math.max(30, Math.min(100, c||0));
+      body.gpuThreshold = Math.max(30, Math.min(100, g||0));
+      try {
+        console.log('[fan] send control (TEMP)', body);
+        const res = await fetch('/web/fan/control', { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, body: JSON.stringify(body) });
+        if (!res.ok) { console.error('[fan] control TEMP HTTP', res.status); return fetchTelemetry(); }
+        const data = await res.json();
+        setEditingTemp(false); pendingCpu = null; pendingGpu = null; render(data);
+      } catch(err){ console.error('[fan] control TEMP error:', err); fetchTelemetry(); }
     }
 
     function startSse(){
@@ -169,34 +234,36 @@
     function guardModeChange(){
       if (modeSel.hasAttribute('disabled')) {
         console.log('[fan] change ignored (disabled)');
-        updateManualVisibility();
+        updateVisibility();
         return true;
       }
       return false;
     }
 
     // 이벤트 바인딩
+    dimSpeed && dimSpeed.addEventListener('change', updateVisibility);
+    dimTemp && dimTemp.addEventListener('change', updateVisibility);
+
     modeSel.addEventListener('change', ()=>{
       console.log('[fan] modeSel change ->', modeSel.value);
       if (guardModeChange()) return;
-      // 모드 변경 시 보류값 초기화
-      pendingPwm = null;
-      updateManualVisibility();
-      sendControl();
+      pendingPwm = null; pendingCpu = null; pendingGpu = null;
+      updateVisibility();
+      sendSpeedControl();
     });
+
     if (pwmRange) {
       pwmRange.addEventListener('input', ()=>{
-        setEditing(true);
+        setEditingPwm(true);
         if (!pwmNum||!pwmLabel) return;
         pwmNum.value = pwmRange.value;
         pwmLabel.textContent = `${pwmRange.value}%`;
         pendingPwm = Number(pwmRange.value);
       });
-      // pointerup/blur/change 시 즉시 해제하지 않음
     }
     if (pwmNum) {
       pwmNum.addEventListener('input', ()=>{
-        setEditing(true);
+        setEditingPwm(true);
         if (!pwmRange||!pwmLabel) return;
         const v = Math.max(0, Math.min(100, Number(pwmNum.value)||0));
         pwmNum.value = v;
@@ -204,11 +271,30 @@
         pwmLabel.textContent = `${v}%`;
         pendingPwm = v;
       });
-      // focus/blur/change로 편집 상태를 즉시 종료하지 않음
     }
-    if (applyBtn) applyBtn.addEventListener('click', ()=>{ setEditing(false); sendControl(); });
+    if (applyBtn) applyBtn.addEventListener('click', ()=>{ setEditingPwm(false); sendSpeedControl(); });
 
-    // 시작: 초기 동기화 1회 + SSE 우선, 불가 시 폴링
+    const clamp = (v, lo, hi)=> Math.max(lo, Math.min(hi, v));
+    function syncCpu(v){
+      const val = clamp(Number(v)||0, 30, 100);
+      if (cpuThRange) cpuThRange.value = val;
+      if (cpuThNum) cpuThNum.value = val;
+    }
+    function syncGpu(v){
+      const val = clamp(Number(v)||0, 30, 100);
+      if (gpuThRange) gpuThRange.value = val;
+      if (gpuThNum) gpuThNum.value = val;
+    }
+
+    if (cpuThRange) cpuThRange.addEventListener('input', ()=>{ setEditingTemp(true); syncCpu(cpuThRange.value); pendingCpu = Number(cpuThRange.value); });
+    if (cpuThNum)   cpuThNum.addEventListener('input',   ()=>{ setEditingTemp(true); syncCpu(cpuThNum.value);   pendingCpu = Number(cpuThNum.value);   });
+    if (gpuThRange) gpuThRange.addEventListener('input', ()=>{ setEditingTemp(true); syncGpu(gpuThRange.value); pendingGpu = Number(gpuThRange.value); });
+    if (gpuThNum)   gpuThNum.addEventListener('input',   ()=>{ setEditingTemp(true); syncGpu(gpuThNum.value);   pendingGpu = Number(gpuThNum.value);   });
+
+    if (applyTempBtn) applyTempBtn.addEventListener('click', ()=>{ setEditingTemp(false); sendTempControl(); });
+
+    // 시작: 초기 동기화 1회 + 섹션 토글
+    updateVisibility();
     fetchTelemetry();
     if(!startSse()) startPolling();
   }
