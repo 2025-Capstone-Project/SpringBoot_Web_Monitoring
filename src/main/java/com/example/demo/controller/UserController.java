@@ -20,7 +20,6 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
 import org.springframework.security.web.savedrequest.RequestCache;
-import org.springframework.security.web.savedrequest.SavedRequest;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -121,15 +120,10 @@ public class UserController {
             new HttpSessionSecurityContextRepository()
                     .saveContext(SecurityContextHolder.getContext(), request, response);
 
-            // SavedRequest로 리다이렉트
+            // SavedRequest는 무시하고 제거: 항상 대시보드로 리다이렉트
             RequestCache requestCache = new HttpSessionRequestCache();
-            SavedRequest saved = requestCache.getRequest(request, response);
-            String target = (saved != null) ? saved.getRedirectUrl() : "/fan";
-            if (target == null || target.contains("/error")) {
-                target = "/fan";
-            }
-            String sep = target.contains("?") ? "&" : "?";
-            return "redirect:" + target + sep + "login=success";
+            try { requestCache.removeRequest(request, response); } catch (Exception ignored) {}
+            return "redirect:/fan?login=success";
         } else {
             // 로그인 실패 시 에러 메시지 표시
             model.addAttribute("errorMessage", "사용자 이름 또는 비밀번호가 올바르지 않습니다.");
