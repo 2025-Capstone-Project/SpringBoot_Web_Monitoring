@@ -23,6 +23,10 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-web'
+    // WebSocket(STOMP)
+    implementation 'org.springframework.boot:spring-boot-starter-websocket'
+    // InfluxDB Java client
+    implementation 'com.influxdb:influxdb-client-java:6.11.0'
     // Spring Security
     implementation 'org.springframework.boot:spring-boot-starter-security'
     // JWT (jjwt 0.11.x 분리 의존성)
