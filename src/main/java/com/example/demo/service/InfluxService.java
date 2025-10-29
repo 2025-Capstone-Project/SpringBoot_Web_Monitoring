@@ -21,7 +21,7 @@ public class InfluxService implements DisposableBean {
 
     public InfluxService(
             @Value("${influx.url:http://localhost:8086}") String url,
-            @Value("${INFLUX_TOKEN}") String token,
+            @Value("${influx.token:${INFLUX_TOKEN:}}") String token,
             @Value("${influx.org:HANBAT}") String org,
             @Value("${influx.bucket:TEMPER}") String bucket
     ) {

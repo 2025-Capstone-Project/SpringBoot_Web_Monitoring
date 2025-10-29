@@ -25,7 +25,7 @@
 
     const serverModeBadge = el('serverModeBadge');
 
-    // 라디오(표시 토글)
+    // 라디오
     const dimSpeed = document.getElementById('dimSpeed');
     const dimTemp = document.getElementById('dimTemp');
     const dimensionGroup = document.getElementById('dimensionGroup');
@@ -44,8 +44,7 @@
         editingTimerPwm = setTimeout(()=>{
           editing.pwm = false;
           pendingPwm = null;
-          console.log('[fan] editing PWM timeout -> revert to server value');
-          try { fetchTelemetry(); } catch(e) {}
+          console.log('[fan] editing PWM timeout -> keep server push');
         }, 10000);
       }
     };
@@ -56,8 +55,7 @@
         editingTimerTemp = setTimeout(()=>{
           editing.temp = false;
           pendingCpu = null; pendingGpu = null;
-          console.log('[fan] editing TEMP timeout -> revert to server value');
-          try { fetchTelemetry(); } catch(e) {}
+          console.log('[fan] editing TEMP timeout -> keep server push');
         }, 10000);
       }
     };
@@ -174,28 +172,21 @@
       if (actualPwm) countUp(actualPwm, v=>`${v} %`, data.actualPwm);
     }
 
-    async function fetchTelemetry(){
-      try {
-        const res = await fetch('/web/fan/telemetry', { headers: { 'Accept': 'application/json' } });
-        if (!res.ok) { console.error('[fan] telemetry HTTP', res.status); return; }
-        const data = await res.json();
-        render(data);
-      } catch(err){ console.error('[fan] telemetry error:', err); }
-    }
-
+    // HTTP/SSE/폴링 제거 → WS 전용 제어 전송
     async function sendSpeedControl(){
       const body = { dimension: 'SPEED', mode: modeSel.value };
       if (modeSel.value === 'MANUAL' && pwmNum) {
         const v = Number(pwmNum.value);
         body.pwm = Math.max(0, Math.min(100, isFinite(v) ? v : 0));
       }
-      try {
+      if (window.__stompClient && window.__stompConnected) {
         console.log('[fan] send control (SPEED)', body);
-        const res = await fetch('/web/fan/control', { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, body: JSON.stringify(body) });
-        if (!res.ok) { console.error('[fan] control HTTP', res.status); return fetchTelemetry(); }
-        const data = await res.json();
-        setEditingPwm(false); pendingPwm = null; render(data);
-      } catch(err){ console.error('[fan] control error:', err); fetchTelemetry(); }
+        window.__stompClient.send('/ws/control', {}, JSON.stringify(body));
+        // 서버에서 /topic/telemetry로 확정값 푸시
+        setEditingPwm(false); pendingPwm = null;
+      } else {
+        console.error('[fan] STOMP not connected. control ignored.');
+      }
     }
 
     async function sendTempControl(){
@@ -204,31 +195,33 @@
       const g = isFinite(Number(gpuThNum?.value)) ? Number(gpuThNum.value) : Number(gpuThRange?.value);
       body.cpuThreshold = Math.max(30, Math.min(100, c||0));
       body.gpuThreshold = Math.max(30, Math.min(100, g||0));
-      try {
+      if (window.__stompClient && window.__stompConnected) {
         console.log('[fan] send control (TEMP)', body);
-        const res = await fetch('/web/fan/control', { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, body: JSON.stringify(body) });
-        if (!res.ok) { console.error('[fan] control TEMP HTTP', res.status); return fetchTelemetry(); }
-        const data = await res.json();
-        setEditingTemp(false); pendingCpu = null; pendingGpu = null; render(data);
-      } catch(err){ console.error('[fan] control TEMP error:', err); fetchTelemetry(); }
+        window.__stompClient.send('/ws/control', {}, JSON.stringify(body));
+        setEditingTemp(false); pendingCpu = null; pendingGpu = null;
+      } else {
+        console.error('[fan] STOMP not connected. control ignored.');
+      }
     }
 
-    function startSse(){
-      if (!window.EventSource) return false;
-      try{
-        const es = new EventSource('/web/fan/stream');
-        es.addEventListener('telemetry', e=>{ try{ render(JSON.parse(e.data)); }catch(e){ console.error('[fan] sse parse error', e);} });
-        es.onopen = ()=>{ console.log('[fan] sse open'); fetchTelemetry(); };
-        es.onmessage = e => { try{ render(JSON.parse(e.data)); }catch(e){ console.error('[fan] sse msg parse error', e);} };
-        es.onerror = ()=>{ console.warn('[fan] sse error -> fallback polling'); es.close(); setTimeout(()=>startPolling(),2000); };
+    function startWs(){
+      if (!window.SockJS || !window.Stomp) return false;
+      try {
+        const sock = new SockJS('/ws-endpoint');
+        const client = Stomp.over(sock);
+        client.debug = ()=>{}; // quiet
+        client.connect({}, ()=>{
+          window.__stompClient = client; window.__stompConnected = true;
+          console.log('[fan] ws connected');
+          client.subscribe('/topic/telemetry', msg=>{ try{ render(JSON.parse(msg.body)); }catch(e){ console.error('ws parse', e);} });
+          // 구독 직후 서버가 초기 스냅샷을 push하므로 별도 fetch 불필요
+        }, (err)=>{
+          console.warn('[fan] ws connect fail', err);
+          window.__stompConnected = false;
+          try{ client.disconnect(()=>{}); }catch{}
+        });
         return true;
-      }catch(e){ console.error('[fan] sse init error', e); return false; }
-    }
-
-    function startPolling(){
-      fetchTelemetry();
-      window.__telemetryTimer && clearInterval(window.__telemetryTimer);
-      window.__telemetryTimer = setInterval(fetchTelemetry, 3000);
+      } catch(e){ console.error('[fan] ws init error', e); return false; }
     }
 
     function guardModeChange(){
@@ -293,10 +286,11 @@
 
     if (applyTempBtn) applyTempBtn.addEventListener('click', ()=>{ setEditingTemp(false); sendTempControl(); });
 
-    // 시작: 초기 동기화 1회 + 섹션 토글
+    // 시작: 섹션 토글 후 WS 연결만 시도
     updateVisibility();
-    fetchTelemetry();
-    if(!startSse()) startPolling();
+    if(!startWs()){
+      console.error('[fan] WebSocket 연결 실패. 서버 엔드포인트 및 보안 설정을 확인하세요.');
+    }
   }
 
   if (document.readyState === 'loading') {

@@ -42,6 +42,10 @@ public class SecurityConfig {
                         .requestMatchers("/user/register", "/user/login").permitAll()
                         .requestMatchers("/user/api/register", "/user/api/login").permitAll()
                         .requestMatchers("/css/**", "/js/**").permitAll()
+                        .requestMatchers("/favicon.ico", "/favicon.svg").permitAll() // 파비콘 로딩 허용
+                        // WebSocket(SockJS) 핸드셰이크 허용
+                        .requestMatchers("/ws-endpoint/**").permitAll()
+                        // Q&A는 목록/조회 GET 허용
                         .requestMatchers(HttpMethod.GET, "/qa/**").permitAll()
                         .requestMatchers("/qa/**").authenticated()
                         // 화면용 세션 인증 경로
