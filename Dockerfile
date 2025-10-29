@@ -32,8 +32,13 @@ WORKDIR /app
 # Copy the built jar from the build stage; deterministic location
 COPY --from=build /workspace/build/boot/app.jar /app/app.jar
 
+# Copy entrypoint script and ensure executable
+COPY entrypoint.sh /app/entrypoint.sh
+RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+
+# Cloud Run expects the container to listen on $PORT (default 8080)
 EXPOSE 8080
 USER spring
 
-# You can override server.port by passing -Dserver.port or env SERVER_PORT
-ENTRYPOINT ["sh","-c","java $JAVA_OPTS -Djava.security.egd=file:/dev/./urandom -jar /app/app.jar"]
+# You can override server.port by env PORT; optional .env under /app is sourced automatically
+ENTRYPOINT ["/app/entrypoint.sh"]
