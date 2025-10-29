@@ -1,0 +1,27 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/
+
+# IDE
+*.iml
+.idea/
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Logs
+logs/
+*.log
+
+# Node
+node_modules/
+
