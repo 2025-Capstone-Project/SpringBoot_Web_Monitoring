@@ -110,23 +110,29 @@
 
     // 초기값 반영
     try {
-      if (window.__initialMode) {
-        const m = String(window.__initialMode).toUpperCase();
+      const sectionEl = document.getElementById('fanSection');
+      const ds = sectionEl ? sectionEl.dataset : {};
+      const initialMode = ds?.initialMode || '';
+      const initialSetPwm = Number(ds?.initialSetPwm ?? NaN);
+      const initialCpuTh = Number(ds?.initialCpuTh ?? NaN);
+      const initialGpuTh = Number(ds?.initialGpuTh ?? NaN);
+      if (initialMode) {
+        const m = String(initialMode).toUpperCase();
         modeSel.value = m;
         setBadge(m);
       }
-      if (typeof window.__initialSetPwm === 'number') {
-        pwmRange && (pwmRange.value = window.__initialSetPwm);
-        pwmNum && (pwmNum.value = window.__initialSetPwm);
-        pwmLabel && (pwmLabel.textContent = `${window.__initialSetPwm}%`);
+      if (!Number.isNaN(initialSetPwm)) {
+        pwmRange && (pwmRange.value = initialSetPwm);
+        pwmNum && (pwmNum.value = initialSetPwm);
+        pwmLabel && (pwmLabel.textContent = `${initialSetPwm}%`);
       }
-      if (typeof window.__initialCpuTh === 'number') {
-        cpuThRange && (cpuThRange.value = window.__initialCpuTh);
-        cpuThNum && (cpuThNum.value = window.__initialCpuTh);
+      if (!Number.isNaN(initialCpuTh)) {
+        cpuThRange && (cpuThRange.value = initialCpuTh);
+        cpuThNum && (cpuThNum.value = initialCpuTh);
       }
-      if (typeof window.__initialGpuTh === 'number') {
-        gpuThRange && (gpuThRange.value = window.__initialGpuTh);
-        gpuThNum && (gpuThNum.value = window.__initialGpuTh);
+      if (!Number.isNaN(initialGpuTh)) {
+        gpuThRange && (gpuThRange.value = initialGpuTh);
+        gpuThNum && (gpuThNum.value = initialGpuTh);
       }
     } catch (e) { console.warn('[fan] initial render error', e); }
 
@@ -275,6 +281,56 @@
     // 이벤트 바인딩
     dimSpeed && dimSpeed.addEventListener('change', updateVisibility);
     dimTemp && dimTemp.addEventListener('change', updateVisibility);
+
+    // Accordion collapse lazy-load: Bootstrap collapse 이벤트에 바인딩하여 iframe을 로드합니다.
+    try {
+      ['collapseCpu','collapseGpu','collapseModel'].forEach(cid => {
+        const c = document.getElementById(cid);
+        if (!c) return;
+        c.addEventListener('show.bs.collapse', (ev) => {
+          try {
+            const iframeId = 'iframe' + cid.replace('collapse','');
+            const iframe = document.getElementById(iframeId);
+            if (iframe && (!iframe.src || iframe.src.trim() === '')) {
+              const src = iframe.getAttribute('data-src');
+              if (src) {
+                console.log('[fan] lazy-loading iframe', iframeId, src);
+                iframe.src = src;
+              }
+            }
+          } catch(e) { console.debug('[fan] collapse load fail', e); }
+        });
+      });
+    } catch(e){ console.debug('[fan] accordion bind fail', e); }
+
+    // Keyboard support: clickable KPI cards should toggle collapse on Enter/Space
+    try {
+      document.querySelectorAll('.clickable-accordion').forEach(card => {
+        card.addEventListener('keydown', (ev) => {
+          const key = ev.key || ev.keyCode;
+          if (key === 'Enter' || key === ' ' || key === 'Spacebar' || key === 13 || key === 32) {
+            ev.preventDefault();
+            const targetSelector = card.getAttribute('data-bs-target') || card.dataset.bsTarget;
+            if (targetSelector) {
+              const collapseEl = document.querySelector(targetSelector);
+              if (collapseEl && window.bootstrap && window.bootstrap.Collapse) {
+                try {
+                  const inst = bootstrap.Collapse.getOrCreateInstance(collapseEl);
+                  inst.toggle();
+                } catch(e) {
+                  // fallback
+                  card.click();
+                }
+              } else {
+                card.click();
+              }
+            } else {
+              card.click();
+            }
+          }
+        });
+      });
+    } catch(e){ console.debug('[fan] clickable keyboard bind fail', e); }
 
     modeSel.addEventListener('change', ()=>{
       console.log('[fan] modeSel change ->', modeSel.value);
