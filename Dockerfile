@@ -16,8 +16,8 @@ COPY src src
 # Build Spring Boot fat jar (skip tests for faster image builds)
 RUN ./gradlew --no-daemon clean bootJar -x test \
     && mkdir -p build/boot \
-    && JAR_FILE=$(ls build/libs/*-SNAPSHOT.jar 2>/dev/null | grep -v "-plain" || true) \
-    && if [ -z "$JAR_FILE" ]; then JAR_FILE=$(ls build/libs/*.jar | grep -v "-plain" | head -n1); fi \
+    && JAR_FILE=$(ls build/libs/*-SNAPSHOT.jar 2>/dev/null | grep -v -- "-plain" || true) \
+    && if [ -z "$JAR_FILE" ]; then JAR_FILE=$(ls build/libs/*.jar | grep -v -- "-plain" | head -n1); fi \
     && cp "$JAR_FILE" build/boot/app.jar
 
 # ---- Runtime stage ----

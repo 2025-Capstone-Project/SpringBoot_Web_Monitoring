@@ -151,6 +151,19 @@ public class FanBridgeService {
         }
     }
 
+    /**
+     * Apply local control state optimistically without sending to the external bridge.
+     * This updates lastMode/lastManualPwm/thresholds so getUiTelemetry() reflects the
+     * requested state immediately (useful for optimistic UI updates and page refreshes).
+     */
+    public void applyLocalControl(Map<String, Object> payload) {
+        Object m = payload.get("mode");
+        if (m instanceof String sm) { lastMode.set(normalizeMode(sm)); }
+        if (payload.containsKey("cpu_threshold")) lastCpuTh.set(toInt(payload.get("cpu_threshold")));
+        if (payload.containsKey("gpu_threshold")) lastGpuTh.set(toInt(payload.get("gpu_threshold")));
+        if (payload.containsKey("manual_pwm")) lastManualPwm.set(toInt(payload.get("manual_pwm")));
+    }
+
     private class Listener implements WebSocket.Listener {
         private final StringBuilder buf = new StringBuilder();
         @Override public void onOpen(WebSocket webSocket) { webSocket.request(1); }

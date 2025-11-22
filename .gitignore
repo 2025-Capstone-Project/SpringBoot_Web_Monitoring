@@ -23,6 +23,9 @@ application-local.properties
 *.war
 *.ear
 
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
 ### Temporary
 *.tmp
 *.swp

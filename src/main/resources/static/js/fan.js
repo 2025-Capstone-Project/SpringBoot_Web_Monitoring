@@ -31,9 +31,10 @@
     const dimensionGroup = document.getElementById('dimensionGroup');
 
     // 편집 중 덮어쓰기 방지 + 보류값
-    const editing = { pwm: false, temp: false };
+    const editing = { pwm: false, temp: false, mode: false };
     let editingTimerPwm = null;
     let editingTimerTemp = null;
+    let editingTimerMode = null;
     let pendingPwm = null; // Apply 전까지 사용자가 의도한 PWM
     let pendingCpu = null, pendingGpu = null; // Apply 전까지 임계치 보류값
 
@@ -56,6 +57,16 @@
           editing.temp = false;
           pendingCpu = null; pendingGpu = null;
           console.log('[fan] editing TEMP timeout -> keep server push');
+        }, 10000);
+      }
+    };
+    const setEditingMode = (on)=>{
+      editing.mode = !!on;
+      if (editingTimerMode) { clearTimeout(editingTimerMode); editingTimerMode = null; }
+      if (editing.mode) {
+        editingTimerMode = setTimeout(()=>{
+          editing.mode = false;
+          console.log('[fan] editing MODE timeout -> allow server push to reflect mode');
         }, 10000);
       }
     };
@@ -137,10 +148,23 @@
 
     function render(data){
       if (!data) return;
+      // 서버로부터 전달된 오류 메시지가 있으면 사용자에게 보여줌
+      if (data.error) {
+        console.warn('[fan] server error:', data.error);
+        showServerMessage(String(data.error));
+        // 오류인 경우에도 계속 렌더링은 진행 (서버가 보낸 상태를 신뢰)
+      }
       const serverMode = (data.mode || 'AUTOMATIC').toUpperCase();
-      if (modeSel.value !== serverMode) {
+      // 서버 푸시에 의해 사용자가 방금 변경한 모드가 즉시 덮어써지는 것을 막기 위해
+      // 사용자가 모드를 변경한 직후에는 서버의 모드 반영을 잠시 무시합니다.
+      if (!editing.mode && modeSel.value !== serverMode) {
         console.log('[fan] mode reflect from server ->', serverMode);
         modeSel.value = serverMode;
+      } else if (editing.mode && modeSel.value === serverMode) {
+        // 서버가 사용자가 요청한 동일한 모드를 확정(push)하면 편집 플래그 해제
+        editing.mode = false;
+        if (editingTimerMode) { clearTimeout(editingTimerMode); editingTimerMode = null; }
+        console.log('[fan] server confirmed mode -> clear editing.mode');
       }
       setBadge(serverMode);
 
@@ -181,11 +205,18 @@
       }
       if (window.__stompClient && window.__stompConnected) {
         console.log('[fan] send control (SPEED)', body);
+        setEditingMode(true);
         window.__stompClient.send('/ws/control', {}, JSON.stringify(body));
-        // 서버에서 /topic/telemetry로 확정값 푸시
         setEditingPwm(false); pendingPwm = null;
       } else {
-        console.error('[fan] STOMP not connected. control ignored.');
+        console.warn('[fan] STOMP not connected. fallback to HTTP POST', body);
+        try {
+          setEditingMode(true);
+          const r = await fetch('/api/control', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+          const j = await r.json();
+          if (!j.ok) showServerMessage(j.error || 'control failed');
+        } catch(e){ console.error('[fan] http control fail', e); showServerMessage('HTTP control failed'); }
+        setEditingPwm(false); pendingPwm = null;
       }
     }
 
@@ -197,10 +228,18 @@
       body.gpuThreshold = Math.max(30, Math.min(100, g||0));
       if (window.__stompClient && window.__stompConnected) {
         console.log('[fan] send control (TEMP)', body);
+        setEditingMode(true);
         window.__stompClient.send('/ws/control', {}, JSON.stringify(body));
         setEditingTemp(false); pendingCpu = null; pendingGpu = null;
       } else {
-        console.error('[fan] STOMP not connected. control ignored.');
+        console.warn('[fan] STOMP not connected. fallback to HTTP POST', body);
+        try {
+          setEditingMode(true);
+          const r = await fetch('/api/control', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+          const j = await r.json();
+          if (!j.ok) showServerMessage(j.error || 'control failed');
+        } catch(e){ console.error('[fan] http control fail', e); showServerMessage('HTTP control failed'); }
+        setEditingTemp(false); pendingCpu = null; pendingGpu = null;
       }
     }
 
@@ -241,6 +280,29 @@
       console.log('[fan] modeSel change ->', modeSel.value);
       if (guardModeChange()) return;
       pendingPwm = null; pendingCpu = null; pendingGpu = null;
+      // UI 즉시 업데이트
+      // 사용자 변경 직후 서버 푸시에 의해 덮어써지지 않도록 모드 편집 플래그 설정
+      setEditingMode(true);
+      // 강제 표시: 클라이언트가 곧바로 수동 컨트롤을 보여주도록 함
+      try {
+        if (dimensionGroup) dimensionGroup.style.display = '';
+        if (modeSel.value === 'MANUAL') {
+          if (dimSpeed) dimSpeed.disabled = false;
+          if (dimTemp) dimTemp.disabled = false;
+          // 기본 라디오가 speed이면 speed영역을 직접 보여줌
+          if (dimTemp && dimTemp.checked) {
+            if (tempWrap) { tempWrap.style.display = ''; tempWrap.classList.remove('d-none'); }
+            if (speedWrap) { speedWrap.style.display = 'none'; speedWrap.classList.add('d-none'); }
+          } else {
+            if (speedWrap) { speedWrap.style.display = ''; speedWrap.classList.remove('d-none'); }
+            if (tempWrap) { tempWrap.style.display = 'none'; tempWrap.classList.add('d-none'); }
+          }
+        } else {
+          if (dimensionGroup) dimensionGroup.style.display = 'none';
+          if (speedWrap) { speedWrap.style.display = 'none'; speedWrap.classList.add('d-none'); }
+          if (tempWrap) { tempWrap.style.display = 'none'; tempWrap.classList.add('d-none'); }
+        }
+      } catch(e){ console.warn('[fan] forced visibility failed', e); }
       updateVisibility();
       sendSpeedControl();
     });
@@ -265,7 +327,7 @@
         pendingPwm = v;
       });
     }
-    if (applyBtn) applyBtn.addEventListener('click', ()=>{ setEditingPwm(false); sendSpeedControl(); });
+    if (applyBtn) applyBtn.addEventListener('click', ()=>{ setEditingPwm(false); setEditingMode(true); sendSpeedControl(); });
 
     const clamp = (v, lo, hi)=> Math.max(lo, Math.min(hi, v));
     function syncCpu(v){
@@ -284,7 +346,7 @@
     if (gpuThRange) gpuThRange.addEventListener('input', ()=>{ setEditingTemp(true); syncGpu(gpuThRange.value); pendingGpu = Number(gpuThRange.value); });
     if (gpuThNum)   gpuThNum.addEventListener('input',   ()=>{ setEditingTemp(true); syncGpu(gpuThNum.value);   pendingGpu = Number(gpuThNum.value);   });
 
-    if (applyTempBtn) applyTempBtn.addEventListener('click', ()=>{ setEditingTemp(false); sendTempControl(); });
+    if (applyTempBtn) applyTempBtn.addEventListener('click', ()=>{ setEditingTemp(false); setEditingMode(true); sendTempControl(); });
 
     // 시작: 섹션 토글 후 WS 연결만 시도
     updateVisibility();
