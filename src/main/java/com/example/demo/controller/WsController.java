@@ -15,6 +15,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ResponseBody;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -188,6 +189,13 @@ public class WsController {
     public void pushTelemetry() {
         Map<String, Object> t = bridge.getUiTelemetry();
         if (!t.isEmpty()) broker.convertAndSend("/topic/telemetry", t);
+    }
+
+    // 디버그/테스트용: 현재 서버가 클라이언트에 제공하는 UI 텔레메트리(브리지+Influx 병합)를 JSON으로 반환합니다.
+    @GetMapping("/api/telemetry")
+    @ResponseBody
+    public Map<String, Object> telemetryApi() {
+        return bridge.getUiTelemetry();
     }
 
     @GetMapping("/fan")

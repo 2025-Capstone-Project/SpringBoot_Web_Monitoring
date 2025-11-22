@@ -6,6 +6,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -43,13 +44,16 @@ public class FanBridgeService {
     private final AtomicReference<Integer> lastManualPwm = new AtomicReference<>(0);
 
     private final ObjectMapper mapper = new ObjectMapper();
+    private final InfluxService influxService;
 
     public FanBridgeService(@Value("${fan.bridge.wsUrl}") String wsUrl,
                             @Value("${fan.bridge.connectRetryMillis:3000}") long retryMillis,
-                            @Value("${fan.bridge.pingIntervalMillis:1000}") long pingIntervalMillis) {
+                            @Value("${fan.bridge.pingIntervalMillis:1000}") long pingIntervalMillis,
+                            @Autowired(required = false) InfluxService influxService) {
         this.wsUrl = wsUrl;
         this.retryMillis = retryMillis;
         this.pingIntervalMillis = pingIntervalMillis;
+        this.influxService = influxService;
     }
 
     @PostConstruct
@@ -105,11 +109,16 @@ public class FanBridgeService {
 
     public Map<String, Object> getUiTelemetry() {
         Map<String, Object> ext = lastTelemetry.get();
+        Map<String, Object> influx = Map.of();
+        try {
+            if (influxService != null) influx = influxService.latestTemps();
+        } catch (Exception e) { log.debug("influx read fail: {}", e.toString()); }
+
         String mode = normalizeMode(lastMode.get());
-        int cpuTemp = toInt(ext.getOrDefault("cpu_temp", ext.getOrDefault("cpuTemp", 0)));
-        int gpuTemp = toInt(ext.getOrDefault("gpu_temp", ext.getOrDefault("gpuTemp", 0)));
+        int cpuTemp = toInt(ext.getOrDefault("cpu_temp", ext.getOrDefault("cpuTemp", influx.getOrDefault("cpuTemp", 0))));
+        int gpuTemp = toInt(ext.getOrDefault("gpu_temp", ext.getOrDefault("gpuTemp", influx.getOrDefault("gpuTemp", 0))));
         int pwm = toInt(ext.getOrDefault("pwm", ext.getOrDefault("setPwm", lastManualPwm.get())));
-        int code = toInt(ext.getOrDefault("model_result", -1));
+        int code = toInt(ext.getOrDefault("model_result", influx.getOrDefault("model_result", -1)));
         String label = code < 0 ? "Unknown" : (code == 0 ? "Normal" : "Abnormal");
         int cpuTh = Optional.ofNullable(lastCpuTh.get()).orElse(60);
         int gpuTh = Optional.ofNullable(lastGpuTh.get()).orElse(60);
