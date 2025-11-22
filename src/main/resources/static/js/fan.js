@@ -1,4 +1,8 @@
+console.log('[fan] fan.js loaded');
+
 (function(){
+  // quick load marker for debugging (shows if the script was actually parsed/executed)
+  try { console.log('[fan] script loaded at ' + new Date().toISOString()); } catch(e) {}
   function init(){
     const el = id => document.getElementById(id);
     const cpu = el('cpuTemp');
@@ -71,9 +75,15 @@
       }
     };
 
+    // Only initialize on the Fan dashboard page which contains #fanSection
+    const sectionElCheck = document.getElementById('fanSection');
+    if (!sectionElCheck) {
+      try { console.debug('[fan] fanSection not present; skipping initialization.'); } catch(e){}
+      return; // nothing to do on other pages
+    }
     if (!modeSel) {
-      console.warn('[fan] elements not ready yet. retry...');
-      setTimeout(init, 100); return;
+      console.warn('[fan] control elements missing; aborting init');
+      return;
     }
     console.log('[fan] init OK. adminDisabled=', modeSel.hasAttribute('disabled'));
 
@@ -161,7 +171,7 @@
         // 오류인 경우에도 계속 렌더링은 진행 (서버가 보낸 상태를 신뢰)
       }
       const serverMode = (data.mode || 'AUTOMATIC').toUpperCase();
-      // 서버 푸시에 의해 사용자가 방금 변경한 모드가 즉시 덮어써지는 것을 막기 위해
+      // 서버 푸시에 의해 사용자가 방금 변경한 모드가 즉시 덮어지는 것을 막기 위해
       // 사용자가 모드를 변경한 직후에는 서버의 모드 반영을 잠시 무시합니다.
       if (!editing.mode && modeSel.value !== serverMode) {
         console.log('[fan] mode reflect from server ->', serverMode);
@@ -283,27 +293,34 @@
     dimTemp && dimTemp.addEventListener('change', updateVisibility);
 
     // Accordion collapse lazy-load: Bootstrap collapse 이벤트에 바인딩하여 iframe을 로드합니다.
-    try {
-      ['collapseCpu','collapseGpu','collapseModel'].forEach(cid => {
-        const c = document.getElementById(cid);
-        if (!c) return;
-        c.addEventListener('show.bs.collapse', (ev) => {
-          try {
-            const iframeId = 'iframe' + cid.replace('collapse','');
-            const iframe = document.getElementById(iframeId);
-            if (iframe && (!iframe.src || iframe.src.trim() === '')) {
-              const src = iframe.getAttribute('data-src');
-              if (src) {
-                console.log('[fan] lazy-loading iframe', iframeId, src);
-                iframe.src = src;
-              }
-            }
-          } catch(e) { console.debug('[fan] collapse load fail', e); }
-        });
-      });
-    } catch(e){ console.debug('[fan] accordion bind fail', e); }
+    document.addEventListener('DOMContentLoaded', () => {
+      try {
+          ['collapseCpu','collapseGpu','collapseModel'].forEach(cid => {
+              const c = document.getElementById(cid);
+              if (!c) return;
+              c.addEventListener('show.bs.collapse', () => {
+                  try {
+                      const iframeId = 'iframe' + cid.replace('collapse','');
+                      const iframe = document.getElementById(iframeId);
+                      if (iframe && (!iframe.src || iframe.src.trim() === '')) {
+                          const src = iframe.getAttribute('data-src');
+                          if (src) {
+                              console.log('[fan] lazy-loading iframe', iframeId, src);
+                              iframe.src = src;
+                          }
+                      }
+                  } catch(e) {
+                      console.debug('[fan] collapse load fail', e);
+                  }
+              });
+          });
+      } catch(e){
+          console.debug('[fan] accordion bind fail', e);
+      }
+    });
 
-    // Keyboard support: clickable KPI cards should toggle collapse on Enter/Space
+
+      // Keyboard support: clickable KPI cards should toggle collapse on Enter/Space
     try {
       document.querySelectorAll('.clickable-accordion').forEach(card => {
         card.addEventListener('keydown', (ev) => {
@@ -329,10 +346,104 @@
             }
           }
         });
-      });
-    } catch(e){ console.debug('[fan] clickable keyboard bind fail', e); }
+        // Click handler: ensure collapse toggles via Bootstrap API (some environments ignore data-bs-toggle on arbitrary elements)
+        card.addEventListener('click', (ev) => {
+          try {
+            const targetSelector = card.getAttribute('data-bs-target') || card.dataset.bsTarget;
+            if (!targetSelector) return;
+            const collapseEl = document.querySelector(targetSelector);
+            if (!collapseEl) {
+              console.debug('[fan] collapse target not found for', targetSelector);
+              return;
+            }
+            if (window.bootstrap && window.bootstrap.Collapse) {
+              const inst = bootstrap.Collapse.getOrCreateInstance(collapseEl);
+              console.debug('[fan] toggling collapse via API for', targetSelector);
+              inst.toggle();
+              return;
+            }
+            // Manual fallback: toggle 'show' class and enforce accordion behavior
+            const isShown = collapseEl.classList.contains('show');
+            if (isShown) {
+              // hide with transition: set height to 0 then remove show
+              try {
+                collapseEl.style.height = collapseEl.scrollHeight + 'px';
+                // force reflow
+                // eslint-disable-next-line no-unused-expressions
+                collapseEl.offsetHeight;
+                collapseEl.style.transition = 'height 200ms ease';
+                collapseEl.style.height = '0px';
+                setTimeout(()=>{
+                  collapseEl.classList.remove('show');
+                  collapseEl.style.display = 'none';
+                  collapseEl.style.height = '';
+                  collapseEl.style.transition = '';
+                }, 220);
+              } catch(e){ collapseEl.classList.remove('show'); collapseEl.style.display = 'none'; }
+              card.setAttribute('aria-expanded', 'false');
+            } else {
+              // close other open panels in this accordion (apply hide transition)
+              try {
+                const parent = document.getElementById('grafanaAccordion');
+                if (parent) {
+                  parent.querySelectorAll('.accordion-collapse.show').forEach(openEl => {
+                    if (openEl !== collapseEl) {
+                      try {
+                        openEl.style.height = openEl.scrollHeight + 'px';
+                        // reflow
+                        // eslint-disable-next-line no-unused-expressions
+                        openEl.offsetHeight;
+                        openEl.style.transition = 'height 200ms ease';
+                        openEl.style.height = '0px';
+                        setTimeout(()=>{
+                          openEl.classList.remove('show');
+                          openEl.style.display = 'none';
+                          openEl.style.height = '';
+                          openEl.style.transition = '';
+                        }, 220);
+                      } catch(e){ openEl.classList.remove('show'); openEl.style.display = 'none'; }
+                      // also unset aria-expanded on any trigger that targets it
+                      document.querySelectorAll('[data-bs-target]').forEach(trg => {
+                        if (trg.getAttribute('data-bs-target') === '#' + openEl.id || trg.dataset.bsTarget === '#' + openEl.id) {
+                          trg.setAttribute('aria-expanded', 'false');
+                        }
+                      });
+                    }
+                  });
+                }
+              } catch(e){ console.debug('[fan] accordion close others fail', e); }
+              // show target
+              try {
+                collapseEl.classList.add('show');
+                collapseEl.style.display = 'block';
+                const targetHeight = collapseEl.scrollHeight + 'px';
+                collapseEl.style.height = '0px';
+                // force reflow
+                // eslint-disable-next-line no-unused-expressions
+                collapseEl.offsetHeight;
+                collapseEl.style.transition = 'height 200ms ease';
+                collapseEl.style.height = targetHeight;
+                setTimeout(()=>{
+                  collapseEl.style.height = '';
+                  collapseEl.style.transition = '';
+                }, 220);
+              } catch(e){ collapseEl.classList.add('show'); collapseEl.style.display = 'block'; }
+              card.setAttribute('aria-expanded', 'true');
+              // lazy-load iframe inside this collapse (manual since show.bs.collapse won't fire)
+              try {
+                const iframe = collapseEl.querySelector('iframe');
+                if (iframe && (!iframe.src || iframe.src.trim() === '')) {
+                  const src = iframe.getAttribute('data-src');
+                  if (src) { iframe.src = src; console.debug('[fan] manual lazy-load iframe', iframe.id, src); }
+                }
+              } catch(e){ console.debug('[fan] manual iframe load fail', e); }
+            }
+          } catch (e) { console.debug('[fan] clickable click handler error', e); }
+        });
+       });
+     } catch(e){ console.debug('[fan] clickable keyboard bind fail', e); }
 
-    modeSel.addEventListener('change', ()=>{
+     modeSel.addEventListener('change', ()=>{
       console.log('[fan] modeSel change ->', modeSel.value);
       if (guardModeChange()) return;
       pendingPwm = null; pendingCpu = null; pendingGpu = null;
