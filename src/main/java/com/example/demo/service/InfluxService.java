@@ -35,10 +35,20 @@ public class InfluxService implements DisposableBean {
      * 예: {cpu_temperature: 55.3, gpu_temperature: 50.1, model_result: 1, setPwm: 35, actualPwm: 32}
      */
     public Map<String,Object> latestTemps() {
-        String flux = "from(bucket: '"+bucket+"') \n" +
-                "|> range(start: -5m) \n" +
-                "|> filter(fn: (r) => r._measurement == 'thermal') \n" +
-                "|> last()";
+        // String flux = "from(bucket: '"+bucket+"') \n" +
+        //        "|> range(start: -5m) \n" +
+        //        "|> filter(fn: (r) => r._measurement == 'thermal') \n" +
+        //        "|> last()";
+        String flux = 
+            "from(bucket: \"" + bucket + "\")\n" +
+            "  |> range(start: -7d)\n" +
+            "  |> filter(fn: (r) => r._measurement == \"cpu_temperature\" or\n" +
+            "                       r._measurement == \"gpu_temperature\" or\n" +
+            "                       r._measurement == \"model_result\")\n" +
+            "  |> filter(fn: (r) => r._field == \"value\")\n" +
+            "  |> group(columns: [\"_measurement\"])\n" +
+            "  |> sort(columns: [\"_time\"], desc: true)\n" +
+            "  |> limit(n: 1)";
         QueryApi q = client.getQueryApi();
         List<FluxTable> tables = q.query(flux, org);
         Map<String,Object> res = new HashMap<>();
