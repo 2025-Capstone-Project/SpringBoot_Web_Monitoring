@@ -122,6 +122,22 @@
     </div>
 
     <!-- Grafana accordion panels (lazy-loaded iframes) -->
+    <!-- Video Stream Panel -->
+    <div class="card shadow-sm p-4 mt-4">
+        <h4 class="mb-3 text-center">Live Video Stream</h4>
+        <div class="row g-3 align-items-end mb-3">
+            <div class="col-12">
+                <button id="videoStreamToggle" class="btn btn-success w-100">Start Stream</button>
+            </div>
+        </div>
+        <div style="position:relative; width:100%; background:#000; border-radius:0.25rem; overflow:hidden;">
+            <canvas id="videoCanvas" style="display:block; width:100%; height:auto; max-height:600px; background:#000;"></canvas>
+            <div id="videoStatus" style="position:absolute; top:10px; right:10px; background:rgba(0,0,0,0.7); color:#fff; padding:8px 12px; border-radius:4px; font-size:12px;">
+                Disconnected
+            </div>
+        </div>
+    </div>
+
     <div class="accordion mt-3" id="grafanaAccordion">
        <div class="accordion-item">
         <div id="collapseCpu" class="accordion-collapse collapse" data-bs-parent="#grafanaAccordion">

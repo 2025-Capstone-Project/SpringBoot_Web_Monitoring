@@ -347,7 +347,7 @@ console.log('[fan] fan.js loaded');
           }
         });
         // Click handler: ensure collapse toggles via Bootstrap API (some environments ignore data-bs-toggle on arbitrary elements)
-        card.addEventListener('click', (ev) => {
+        card.addEventListener('click', () => {
           try {
             const targetSelector = card.getAttribute('data-bs-target') || card.dataset.bsTarget;
             if (!targetSelector) return;
@@ -520,6 +520,118 @@ console.log('[fan] fan.js loaded');
     if(!startWs()){
       console.error('[fan] WebSocket 연결 실패. 서버 엔드포인트 및 보안 설정을 확인하세요.');
     }
+
+    // ========== VIDEO STREAM MODULE ==========
+    const videoCanvas = document.getElementById('videoCanvas');
+    const videoStatus = document.getElementById('videoStatus');
+    const videoStreamToggle = document.getElementById('videoStreamToggle');
+
+    let videoWs = null;
+    let videoRunning = false;
+    let currentFps = 30; // 이 값을 직접 변경하여 FPS 조절 (기본값: 30 fps)
+    let lastFrameTime = 0;
+
+    if (!videoCanvas) {
+      console.debug('[fan] video elements not found; video module skipped');
+    } else {
+      // 스트림 토글 버튼
+      if (videoStreamToggle) {
+        videoStreamToggle.addEventListener('click', () => {
+          if (videoRunning) {
+            stopVideoStream();
+          } else {
+            startVideoStream();
+          }
+        });
+      }
+
+      function setVideoStatus(msg, color = '#00ff00') {
+        if (videoStatus) {
+          videoStatus.textContent = msg;
+          videoStatus.style.color = color;
+        }
+        console.log('[fan-video]', msg);
+      }
+
+      function startVideoStream() {
+        if (videoRunning) return;
+        try {
+          videoWs = new WebSocket('ws://192.168.43.5:4001/ws/video'); // 사용자 설정 주소로 변경 필요
+          videoWs.binaryType = 'arraybuffer'; // base64 텍스트로도 수신 가능, 필요시 blob으로 변경
+          videoWs.onopen = () => {
+            videoRunning = true;
+            setVideoStatus('Connected', '#00ff00');
+            if (videoStreamToggle) videoStreamToggle.textContent = 'Stop Stream';
+            console.log('[fan-video] WebSocket connected');
+          };
+          videoWs.onmessage = (event) => {
+            const now = performance.now();
+            const frameInterval = 1000 / currentFps; // ms per frame
+            if (now - lastFrameTime < frameInterval) {
+              return; // FPS 제한: 너무 빈번한 프레임 무시
+            }
+            lastFrameTime = now;
+            try {
+              let data = event.data;
+              // base64 문자열 또는 blob 처리
+              if (typeof data === 'string') {
+                // base64 string: data:image/jpeg;base64,... 또는 raw base64
+                if (!data.startsWith('data:')) {
+                  data = 'data:image/jpeg;base64,' + data;
+                }
+                displayImageFromBase64(data);
+              } else if (data instanceof ArrayBuffer) {
+                // binary data (blob)
+                const blob = new Blob([data], { type: 'image/jpeg' });
+                const reader = new FileReader();
+                reader.onload = (e) => displayImageFromBase64(e.target.result);
+                reader.readAsDataURL(blob);
+              }
+            } catch (e) {
+              console.debug('[fan-video] frame render error', e);
+            }
+          };
+          videoWs.onerror = (err) => {
+            setVideoStatus('Error', '#ff0000');
+            console.error('[fan-video] WebSocket error', err);
+          };
+          videoWs.onclose = () => {
+            videoRunning = false;
+            setVideoStatus('Disconnected', '#ffff00');
+            if (videoStreamToggle) videoStreamToggle.textContent = 'Start Stream';
+            console.log('[fan-video] WebSocket disconnected');
+          };
+        } catch (e) {
+          setVideoStatus('Failed', '#ff0000');
+          console.error('[fan-video] failed to connect', e);
+        }
+      }
+
+      function stopVideoStream() {
+        if (videoWs) {
+          videoWs.close();
+          videoWs = null;
+        }
+        videoRunning = false;
+        setVideoStatus('Stopped', '#ffff00');
+        if (videoStreamToggle) videoStreamToggle.textContent = 'Start Stream';
+      }
+
+      function displayImageFromBase64(base64Data) {
+        const img = new Image();
+        img.onload = () => {
+          const ctx = videoCanvas.getContext('2d');
+          if (!ctx) return;
+          // Canvas 크기를 이미지 크기에 맞춤
+          videoCanvas.width = img.width;
+          videoCanvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+        };
+        img.onerror = (e) => console.debug('[fan-video] image load error', e);
+        img.src = base64Data;
+      }
+    }
+    // ========== END VIDEO STREAM MODULE ==========
   }
 
   if (document.readyState === 'loading') {
