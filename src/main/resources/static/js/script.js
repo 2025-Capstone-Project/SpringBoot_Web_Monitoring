@@ -59,6 +59,60 @@ document.addEventListener('DOMContentLoaded', function() {
         console.warn('[ws] init error', e);
     }
 
+    // ===== KPI -> Accordion 연결 및 Grafana iframe lazy-load =====
+    (function wireAccordionKpis(){
+        const kpis = document.querySelectorAll('.clickable-accordion');
+        if (!kpis || kpis.length === 0) {
+            console.debug('[kpi] no clickable-accordion elements found');
+            return;
+        }
+        console.debug('[kpi] found', kpis.length, 'clickable items');
+
+        kpis.forEach(el => {
+            // data-bs-target may be like "#collapseCpu"
+            const target = el.getAttribute('data-bs-target') || ('#' + (el.getAttribute('aria-controls') || ''));
+            if (!target) return;
+            const collapseEl = document.querySelector(target);
+            if (!collapseEl) {
+                console.debug('[kpi] collapse target not found for', target);
+                return;
+            }
+
+            // 키보드 접근성: Enter/Space로도 열리게 함
+            el.addEventListener('keydown', (ev) => {
+                if (ev.key === 'Enter' || ev.key === ' ') {
+                    ev.preventDefault();
+                    el.click();
+                }
+            });
+
+            el.addEventListener('click', () => {
+                // Bootstrap 5 Collapse toggle
+                try {
+                    // If collapse is hidden, show it; otherwise hide
+                    const isShown = collapseEl.classList.contains('show');
+                    const bsCollapse = bootstrap.Collapse.getOrCreateInstance(collapseEl, {toggle:false});
+                    if (isShown) bsCollapse.hide(); else bsCollapse.show();
+                } catch(err) {
+                    console.warn('[kpi] bootstrap collapse error', err);
+                }
+            });
+
+            // lazy-load iframe inside collapse when it is shown
+            collapseEl.addEventListener('shown.bs.collapse', () => {
+                const iframe = collapseEl.querySelector('iframe');
+                if (iframe) {
+                    const dataSrc = iframe.getAttribute('data-src');
+                    // if data-src is set and src not yet assigned, set it
+                    if (dataSrc && (!iframe.getAttribute('src') || iframe.getAttribute('src').trim() === '')) {
+                        iframe.setAttribute('src', dataSrc);
+                        console.debug('[kpi] lazy-loaded iframe for', target, dataSrc);
+                    }
+                }
+            });
+        });
+    })();
+
     // ===== 하단 티커(애니메이션) =====
     function ensureBottomPanel(){
         let panel = document.getElementById('bottomTicker');

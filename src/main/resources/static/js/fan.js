@@ -559,6 +559,7 @@ console.log('[fan] fan.js loaded');
           videoWs = new WebSocket('ws://192.168.43.5:4001/ws/video'); // 사용자 설정 주소로 변경 필요
           videoWs.binaryType = 'arraybuffer'; // base64 텍스트로도 수신 가능, 필요시 blob으로 변경
           videoWs.onopen = () => {
+            console.log("fanvideo connected");
             videoRunning = true;
             setVideoStatus('Connected', '#00ff00');
             if (videoStreamToggle) videoStreamToggle.textContent = 'Stop Stream';
@@ -595,11 +596,11 @@ console.log('[fan] fan.js loaded');
             setVideoStatus('Error', '#ff0000');
             console.error('[fan-video] WebSocket error', err);
           };
-          videoWs.onclose = () => {
+          videoWs.onclose = (event) => {
             videoRunning = false;
             setVideoStatus('Disconnected', '#ffff00');
             if (videoStreamToggle) videoStreamToggle.textContent = 'Start Stream';
-            console.log('[fan-video] WebSocket disconnected');
+            console.log('[fan-video] WebSocket disconnected', "code", event.code, "reason", event.reason, "wasClean", event.wasClean);
           };
         } catch (e) {
           setVideoStatus('Failed', '#ff0000');

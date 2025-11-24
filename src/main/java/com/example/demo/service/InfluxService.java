@@ -34,8 +34,7 @@ public class InfluxService implements DisposableBean {
             try {
                 c = InfluxDBClientFactory.create(url, token.toCharArray(), org, bucket);
             } catch (Throwable t) {
-                // Influx 접근 실패 시 안전하게 비활성화
-                c = null;
+                // Influx 접근 실패 시 안전하게 비활성화 (c는 이미 null)
             }
         }
         this.client = c;
@@ -75,6 +74,43 @@ public class InfluxService implements DisposableBean {
                     }
                 }
             }
+
+            // 추가: fan_status의 pwm_duty_cycle(실제 PWM) 값을 별도 쿼리로 가져와 정수형으로 변환
+            try {
+                String pwmFlux =
+                    "from(bucket: \"" + bucket + "\")\n" +
+                    "  |> range(start: -5m)\n" +
+                    "  |> filter(fn: (r) => r._measurement == \"fan_status\")\n" +
+                    "  |> filter(fn: (r) => r._field == \"pwm_duty_cycle\")\n" +
+                    "  |> filter(fn: (r) => r.device == \"raspberrypi-fan-01\")\n" +
+                    "  |> last()\n" +
+                    "  |> map(fn: (r) => ({ r with pwm_int: int(v: r._value) }))";
+                List<FluxTable> pwmTables = q.query(pwmFlux, org);
+                for (FluxTable t : pwmTables) {
+                    for (FluxRecord r : t.getRecords()) {
+                        Object v = r.getValue();
+                        // Flux map added pwm_int as a column; try get the "pwm_int" column first
+                        Object pwmIntCol = r.getValueByKey("pwm_int");
+                        Integer pwmInt = null;
+                        if (pwmIntCol instanceof Number) {
+                            pwmInt = ((Number)pwmIntCol).intValue();
+                        } else if (pwmIntCol instanceof String) {
+                            try { pwmInt = Integer.parseInt((String)pwmIntCol); } catch (Exception ignore) {}
+                        }
+                        if (pwmInt == null) {
+                            // fallback: try numeric value
+                            if (v instanceof Number) pwmInt = ((Number)v).intValue();
+                            else if (v instanceof String) {
+                                try { pwmInt = (int)Double.parseDouble((String)v); } catch (Exception ignore) {}
+                            }
+                        }
+                        if (pwmInt != null) res.put("pwmDuty", pwmInt);
+                    }
+                }
+            } catch (Throwable ignored) {
+                // pwm 쿼리 실패 시 생략
+            }
+
             return res;
         } catch (Throwable t) {
             return Map.of();
