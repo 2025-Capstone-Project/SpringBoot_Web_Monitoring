@@ -115,9 +115,9 @@ public class FanBridgeService {
         } catch (Exception e) { log.debug("influx read fail: {}", e.toString()); }
 
         String mode = normalizeMode(lastMode.get());
-        int cpuTemp = toInt(ext.getOrDefault("cpu_temp", ext.getOrDefault("cpuTemp", influx.getOrDefault("cpuTemp", 0))));
-        int gpuTemp = toInt(ext.getOrDefault("gpu_temp", ext.getOrDefault("gpuTemp", influx.getOrDefault("gpuTemp", 0))));
-        int actualPwm = toInt(ext.getOrDefault("actual_pwm", ext.getOrDefault("pwm_value", influx.getOrDefault("pwm_value",0))));
+        int cpuTemp = toInt(ext.getOrDefault("cpuTemp", influx.getOrDefault("cpuTemp", 0)));
+        int gpuTemp = toInt(ext.getOrDefault("gpuTemp", influx.getOrDefault("gpuTemp", 0)));
+        int actualPwm = toInt(ext.getOrDefault("pwm_value", influx.getOrDefault("pwm_value",0)));
         int pwm = toInt(ext.getOrDefault("pwm", ext.getOrDefault("setPwm", lastManualPwm.get())));
         int code = toInt(ext.getOrDefault("model_result", influx.getOrDefault("model_result", -1)));
         String label = code < 0 ? "Unknown" : (code == 0 ? "Normal" : "Abnormal");
