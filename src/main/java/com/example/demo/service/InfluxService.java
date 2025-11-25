@@ -52,8 +52,10 @@ public class InfluxService implements DisposableBean {
             "  |> range(start: -7d)\n" +
             "  |> filter(fn: (r) => r._measurement == \"cpu_temperature\" or\n" +
             "                       r._measurement == \"gpu_temperature\" or\n" +
-            "                       r._measurement == \"model_result\")\n" +
-            "  |> filter(fn: (r) => r._field == \"value\")\n" +
+            "                       r._measurement == \"model_result\" or\n" +
+            "                       r._measurement == \"fan_status\")\n" +
+            "  |> filter(fn: (r) => r._field == \"value\" or\n" +
+            "                       r._field == \"pwm_duty_cycle\")\n" +
             "  |> group(columns: [\"_measurement\"])\n" +
             "  |> sort(columns: [\"_time\"], desc: true)\n" +
             "  |> limit(n: 1)";
@@ -70,47 +72,11 @@ public class InfluxService implements DisposableBean {
                         case "cpu_temperature" -> res.put("cpuTemp", value);
                         case "gpu_temperature" -> res.put("gpuTemp", value);
                         case "model_result" -> res.put("model_result", value);
+                        case "fan_status" -> res.put("pwm_value", value);
                         default -> res.put(measurement, value);
                     }
                 }
             }
-
-            // 추가: fan_status의 pwm_duty_cycle(실제 PWM) 값을 별도 쿼리로 가져와 정수형으로 변환
-            try {
-                String pwmFlux =
-                    "from(bucket: \"" + bucket + "\")\n" +
-                    "  |> range(start: -5m)\n" +
-                    "  |> filter(fn: (r) => r._measurement == \"fan_status\")\n" +
-                    "  |> filter(fn: (r) => r._field == \"pwm_duty_cycle\")\n" +
-                    "  |> filter(fn: (r) => r.device == \"raspberrypi-fan-01\")\n" +
-                    "  |> last()\n" +
-                    "  |> map(fn: (r) => ({ r with pwm_int: int(v: r._value) }))";
-                List<FluxTable> pwmTables = q.query(pwmFlux, org);
-                for (FluxTable t : pwmTables) {
-                    for (FluxRecord r : t.getRecords()) {
-                        Object v = r.getValue();
-                        // Flux map added pwm_int as a column; try get the "pwm_int" column first
-                        Object pwmIntCol = r.getValueByKey("pwm_int");
-                        Integer pwmInt = null;
-                        if (pwmIntCol instanceof Number) {
-                            pwmInt = ((Number)pwmIntCol).intValue();
-                        } else if (pwmIntCol instanceof String) {
-                            try { pwmInt = Integer.parseInt((String)pwmIntCol); } catch (Exception ignore) {}
-                        }
-                        if (pwmInt == null) {
-                            // fallback: try numeric value
-                            if (v instanceof Number) pwmInt = ((Number)v).intValue();
-                            else if (v instanceof String) {
-                                try { pwmInt = (int)Double.parseDouble((String)v); } catch (Exception ignore) {}
-                            }
-                        }
-                        if (pwmInt != null) res.put("pwmDuty", pwmInt);
-                    }
-                }
-            } catch (Throwable ignored) {
-                // pwm 쿼리 실패 시 생략
-            }
-
             return res;
         } catch (Throwable t) {
             return Map.of();
