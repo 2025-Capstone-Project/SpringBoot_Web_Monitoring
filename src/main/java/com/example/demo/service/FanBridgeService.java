@@ -117,6 +117,7 @@ public class FanBridgeService {
         String mode = normalizeMode(lastMode.get());
         int cpuTemp = toInt(ext.getOrDefault("cpu_temp", ext.getOrDefault("cpuTemp", influx.getOrDefault("cpuTemp", 0))));
         int gpuTemp = toInt(ext.getOrDefault("gpu_temp", ext.getOrDefault("gpuTemp", influx.getOrDefault("gpuTemp", 0))));
+        int actual_pwm = toInt(ext.getOrDefault("actual_pwm", ext.getOrDefault("pwm_value", influx.getOrDefault("pwm_value",0))));
         int pwm = toInt(ext.getOrDefault("pwm", ext.getOrDefault("setPwm", lastManualPwm.get())));
         int code = toInt(ext.getOrDefault("model_result", influx.getOrDefault("model_result", -1)));
         String label = code < 0 ? "Unknown" : (code == 0 ? "Normal" : "Abnormal");
@@ -128,7 +129,7 @@ public class FanBridgeService {
                 "gpuTemp", gpuTemp,
                 "model", Map.of("code", code < 0 ? 0 : code, "label", label),
                 "setPwm", mode.equals("MANUAL") ? lastManualPwm.get() : pwm,
-                "actualPwm", pwm,
+                "actualPwm", actual_pwm,
                 "mode", mode,
                 "cpuThreshold", cpuTh,
                 "gpuThreshold", gpuTh
