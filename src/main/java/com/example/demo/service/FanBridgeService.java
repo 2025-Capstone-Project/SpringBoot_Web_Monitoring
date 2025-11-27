@@ -120,7 +120,7 @@ public class FanBridgeService {
         int actualPwm = toInt(ext.getOrDefault("pwm_value", influx.getOrDefault("pwm_value",0)));
         int pwm = toInt(ext.getOrDefault("pwm", ext.getOrDefault("setPwm", lastManualPwm.get())));
         int code = toInt(ext.getOrDefault("model_result", influx.getOrDefault("model_result", -1)));
-        String label = code < 0 ? "Unknown" : (code == 0 ? "Normal" : "Abnormal");
+        String label = code < 0 ? "Unknown" : (code == 0 ? "Abnormal" : "Normal");
         int cpuTh = Optional.ofNullable(lastCpuTh.get()).orElse(60);
         int gpuTh = Optional.ofNullable(lastGpuTh.get()).orElse(60);
         return Map.of(
